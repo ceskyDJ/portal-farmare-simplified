@@ -86,7 +86,7 @@ Global namespace: `window.PF`. Cross-cutting helpers (`jq`/`refresh$`, `norm`, `
 | **`PF.dialogs`** | Observe/skin/simplify native `.ui-dialog`; soft-safe close | `observe`, `skin`, `simplifyDialog`, `ensureSafeDialogApi` | Boot always starts observer |
 | **`PF.boot`** | Enable gate, redirects, first paint, ajaxComplete + MutationObserver | `PF.boot()` | Ties scrape → shell → views → registers/pending/dialogs |
 
-Also exported: `PF.debugNative`, `PF.debugPendingDelete`, `PF.flushHerdCache`.
+Also exported: `PF.flushHerdCache`.
 
 **Typical flow:** loader → boot → scrape.all → shell.ensure + view HTML → registers.refresh (move/simplify/toolbar/summary + pending.refresh) → dialogs.observe; later AJAX/DOM mutations re-enter registers.refresh unless settled / quiet-mutating / filtered URL.
 
@@ -123,7 +123,7 @@ Also exported: `PF.debugNative`, `PF.debugPendingDelete`, `PF.flushHerdCache`.
 - Pigs: `…/StajovyRegistrPrasat`, `…PrasatZmeny` (+ `…PrasatZmenyGrid/Zmeny`)
 - Marks: `Hlaseni/HlaseniStareIzr?kam=ZnamkyNoveOvc|ZnamkyDuplOvc`
 - Free sheep marks: `SubjektyProvozovny/VyhledaniUZNezavesene/NezaveseneZnamky` + configured `fiDruhZvirat` sheep species key
-- Client flags: `pfView`, `pf`, debug hashes (`pfDebugNative`, `pfDebugPendingDelete`, `pfFlushCache`)
+- Client flags: `pfView`, `pf`, `#pfFlushCache`
 
 **DOM scrapes (high level):**
 
@@ -135,7 +135,7 @@ Also exported: `PF.debugNative`, `PF.debugPendingDelete`, `PF.flushHerdCache`.
 - Actions: `otevritDialogZmeny`, DialogPorizeni / DialogSRSkup / DialogPartneri; pending Odeslat / Smazat hlášení + portal Ano confirm
 - Column keep lists match Czech header fragments / `data-colname`
 
-**localStorage keys (non-PII):** `pf-simple-enabled`, `pf-debug-native`, `pf-debug-pending-delete`, `pf-count-pigs|sheep|sheep-male|sheep-female`, `pf-pig-last-change-v4`, `pf-sheep-last-change(-v2)`, `pf-link-sheep|pigs`, `pf-pig-staje-id`, `pf-pig-partners-v6`, `pf-sheep-subject-ids`.
+**localStorage keys (non-PII):** `pf-simple-enabled`, `pf-count-pigs|sheep|sheep-male|sheep-female`, `pf-pig-last-change-v4`, `pf-sheep-last-change(-v2)`, `pf-link-sheep|pigs`, `pf-pig-staje-id`, `pf-pig-partners-v6`, `pf-sheep-subject-ids`.
 
 ### Stability and compatibility notes
 
@@ -147,15 +147,12 @@ Also exported: `PF.debugNative`, `PF.debugPendingDelete`, `PF.flushHerdCache`.
 - If simplified sheep table fails, native grid is left visible rather than blank host.
 - Disable path leaves a pulse FAB “Zapnout jednoduchý režim”.
 
-### Debug / ops helpers
+### Ops helpers
 
 | Helper | Effect |
 |--------|--------|
 | `?pf=on` / `?pf=off` | Force enable/disable + persist |
-| `#pfDebugNative=1` (or `?`; `0`/`off` clears) | Leave native dialog visible during form fill |
-| `#pfDebugPendingDelete=1` | Stop after selecting pending rows, before Smazat hlášení |
 | `#pfFlushCache=1` | One-shot clear herd-count / Poslední změna keys, strip flag, reload |
 | `PF.flushHerdCache()` / `('pig'\|'sheep')` | Console: invalidate + re-render summary on matching page |
-| `PF.debugNative` / `PF.debugPendingDelete` | Functions reading the same flags |
 
 Hash params preferred; query still accepted for backwards compatibility.

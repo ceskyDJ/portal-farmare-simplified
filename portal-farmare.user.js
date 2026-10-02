@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Portál farmáře – zjednodušený (prasata + ovce)
 // @namespace    https://github.com/ceskyDJ/portal-farmare-simplified
-// @version      1.3.82
+// @version      1.3.83
 // @description  Jednoduchý dashboard a registry pro malého chovatele prasat a ovcí v Portálu farmáře / IZR
 // @author       Michal Šmahel (ceskyDJ)
 // @match        https://mze.gov.cz/ssl/app/izr2far/*
@@ -15,56 +15,6 @@
 
   const PF = (window.PF = window.PF || {});
   const STORAGE_KEY = 'pf-simple-enabled';
-  const DEBUG_NATIVE_KEY = 'pf-debug-native';
-  const DEBUG_PENDING_DELETE_KEY = 'pf-debug-pending-delete';
-
-  function debugNativeEnabled() {
-    try {
-      // Client-only hash flag: #pfDebugNative=1 (also accepts ? for backwards compat)
-      const hash = String(location.hash || '').replace(/^#/, '');
-      const fromHash = new URLSearchParams(hash).get('pfDebugNative');
-      const fromQuery = new URL(location.href).searchParams.get(
-        'pfDebugNative'
-      );
-      const q = fromHash != null ? fromHash : fromQuery;
-      if (q === '1' || q === 'on') {
-        localStorage.setItem(DEBUG_NATIVE_KEY, '1');
-        return true;
-      }
-      if (q === '0' || q === 'off') {
-        localStorage.setItem(DEBUG_NATIVE_KEY, '0');
-        return false;
-      }
-      return localStorage.getItem(DEBUG_NATIVE_KEY) === '1';
-    } catch (_) {
-      return false;
-    }
-  }
-  PF.debugNative = debugNativeEnabled;
-
-  /** Stop after selecting rows, before clicking Smazat hlášení — #pfDebugPendingDelete=1 */
-  function debugPendingDeleteEnabled() {
-    try {
-      const hash = String(location.hash || '').replace(/^#/, '');
-      const fromHash = new URLSearchParams(hash).get('pfDebugPendingDelete');
-      const fromQuery = new URL(location.href).searchParams.get(
-        'pfDebugPendingDelete'
-      );
-      const q = fromHash != null ? fromHash : fromQuery;
-      if (q === '1' || q === 'on') {
-        localStorage.setItem(DEBUG_PENDING_DELETE_KEY, '1');
-        return true;
-      }
-      if (q === '0' || q === 'off') {
-        localStorage.setItem(DEBUG_PENDING_DELETE_KEY, '0');
-        return false;
-      }
-      return localStorage.getItem(DEBUG_PENDING_DELETE_KEY) === '1';
-    } catch (_) {
-      return false;
-    }
-  }
-  PF.debugPendingDelete = debugPendingDeleteEnabled;
 
   /** One-shot: #pfFlushCache=1 clears herd count / Poslední změna caches then reloads clean. */
   function consumeFlushCacheFlag() {
@@ -2138,30 +2088,6 @@ body.pf-simple .registrNeodeslane {
   background: rgba(196, 92, 38, 0.08);
 }
 
-/* Debug pending delete: show native grids + highlight Smazat button */
-body.pf-debug-pending-delete #pf-host .pf-debug-reveal,
-body.pf-debug-pending-delete #main .pf-debug-reveal {
-  display: block !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  position: relative !important;
-  left: auto !important;
-  height: auto !important;
-  width: auto !important;
-  max-height: none !important;
-  overflow: auto !important;
-  margin-top: 16px !important;
-  outline: 2px solid var(--pf-accent);
-}
-body.pf-debug-pending-delete a.pf-debug-reveal-btn {
-  display: inline-flex !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  outline: 3px solid #c45c26;
-  outline-offset: 4px;
-  background: #fff4ec !important;
-}
-
 .pf-footer {
   margin-top: 28px;
   padding: 8px 4px 0;
@@ -2487,38 +2413,9 @@ body.pf-native-sheep-fill .ui-dialog-buttonpane {
   left: -10000px !important;
   top: -10000px !important;
 }
-/* Debug: show the real portal dialog above our modal so you can inspect fill/save */
-body.pf-debug-native.pf-native-pig-fill .ui-dialog,
-body.pf-debug-native.pf-native-sheep-fill .ui-dialog,
-body.pf-debug-native.pf-native-pig-fill .ui-dialog-titlebar,
-body.pf-debug-native.pf-native-sheep-fill .ui-dialog-titlebar,
-body.pf-debug-native.pf-native-pig-fill .ui-dialog-buttonpane,
-body.pf-debug-native.pf-native-sheep-fill .ui-dialog-buttonpane,
-body.pf-debug-native.pf-native-pig-fill .ui-widget-overlay,
-body.pf-debug-native.pf-native-sheep-fill .ui-widget-overlay,
-body.pf-debug-native.pf-native-pig-fill .ui-dialog + .ui-dialog,
-body.pf-debug-native.pf-native-sheep-fill .ui-dialog + .ui-dialog,
-body.pf-debug-native.pf-native-pig-fill .ui-front.ui-dialog,
-body.pf-debug-native.pf-native-sheep-fill .ui-front.ui-dialog {
-  opacity: 1 !important;
-  visibility: visible !important;
-  pointer-events: auto !important;
-  left: auto !important;
-  top: auto !important;
-  z-index: 2147483646 !important;
-}
-body.pf-debug-native #pf-pig-modal,
-body.pf-debug-native #pf-sheep-modal {
-  opacity: 0.35;
-  pointer-events: none;
-}
-body.pf-debug-native #pf-pig-modal .pf-modal,
-body.pf-debug-native #pf-sheep-modal .pf-modal {
-  pointer-events: none;
-}
 /* Also hide nested partner-picker dialogs spawned during fill */
-body.pf-native-pig-fill:not(.pf-debug-native) .ui-dialog + .ui-dialog,
-body.pf-native-sheep-fill:not(.pf-debug-native) .ui-dialog + .ui-dialog {
+body.pf-native-pig-fill .ui-dialog + .ui-dialog,
+body.pf-native-sheep-fill .ui-dialog + .ui-dialog {
   opacity: 0 !important;
   visibility: hidden !important;
   pointer-events: none !important;
@@ -5096,24 +4993,6 @@ body.pf-simple .ui-dialog .grid-table {
       return { selected, total: all.length, tables: tables.size };
     },
 
-    /** Reveal hidden native grids briefly so selection is visible in debug. */
-    revealNativeGridsForDebug() {
-      document.body.classList.add('pf-debug-pending-delete');
-      qsa(
-        '#pf-host .pf-native-grid-hide, #main .pf-native-grid-hide'
-      ).forEach((el) => {
-        el.classList.add('pf-debug-reveal');
-        el.classList.remove('pf-native-grid-hide');
-      });
-      const btn = this.findSmazatHlaseniButton();
-      if (btn) {
-        btn.classList.add('pf-debug-reveal-btn');
-        try {
-          btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        } catch (_) {}
-      }
-    },
-
     /** Portal jQuery UI "Dotaz" after Smazat — click Ano. */
     findPortalConfirmAno() {
       const dialogs = qsa('.ui-dialog').filter((d) => {
@@ -5195,17 +5074,6 @@ body.pf-simple .ui-dialog .grid-table {
       // Let ChangeRowState AJAX settle after checkbox clicks
       await new Promise((r) => setTimeout(r, 450));
 
-      if (debugPendingDeleteEnabled()) {
-        this.revealNativeGridsForDebug();
-        this.setStatus(
-          'Debug výběru: vybráno ' +
-            result.selected +
-            ' řádků. Smazat hlášení neklikám — zkontrolujte zaškrtnutí v původní tabulce. ' +
-            '(#pfDebugPendingDelete=0 vypne debug)'
-        );
-        return { debug: true, selected: result.selected };
-      }
-
       const btn = this.findSmazatHlaseniButton();
       if (!btn) {
         throw new Error(
@@ -5239,7 +5107,7 @@ body.pf-simple .ui-dialog .grid-table {
         } catch (_) {}
       }, 1200);
 
-      return { debug: false, selected: result.selected };
+      return { selected: result.selected };
     },
 
     async confirmAll() {
@@ -10365,7 +10233,7 @@ body.pf-simple .ui-dialog .grid-table {
       return false;
     },
 
-    /** Snapshot visible inputs for debug / error messages. */
+    /** Snapshot visible inputs for error messages. */
     describeDialogFields(dialog) {
       if (!dialog) return '';
       const lines = [];
@@ -10429,19 +10297,10 @@ body.pf-simple .ui-dialog .grid-table {
 
     beginNativeFill() {
       document.body.classList.add('pf-native-pig-fill');
-      if (debugNativeEnabled()) {
-        document.body.classList.add('pf-debug-native');
-      } else {
-        document.body.classList.remove('pf-debug-native');
-      }
     },
 
     endNativeFill() {
       document.body.classList.remove('pf-native-pig-fill');
-      // Keep pf-debug-native if user enabled it — class alone does nothing without fill
-      if (!debugNativeEnabled()) {
-        document.body.classList.remove('pf-debug-native');
-      }
     },
 
     closeNativeDialog(dialog) {
@@ -10476,10 +10335,8 @@ body.pf-simple .ui-dialog .grid-table {
 
     async runNative(typ, data) {
       // Keep our modal visible; hide native DialogSRSkup completely while filling
-      // (unless #pfDebugNative=1 — then the portal dialog stays on screen)
       this.beginNativeFill();
       let dialog = null;
-      let leaveOpenForDebug = false;
       try {
         this.openNativeDialog();
         dialog = await this.waitFor(() => this.activeDialog(), {
@@ -10541,8 +10398,8 @@ body.pf-simple .ui-dialog .grid-table {
           this.setPartner(dialog, data.partnerId, data.partnerName);
         }
 
-        // Brief settle so datepicker/mask commit values (debug keeps dialog visible)
-        await new Promise((r) => setTimeout(r, debugNativeEnabled() ? 400 : 200));
+        // Brief settle so datepicker/mask commit values
+        await new Promise((r) => setTimeout(r, 200));
         dialog = this.activeDialog() || dialog;
 
         const pendingBefore = (() => {
@@ -10560,13 +10417,6 @@ body.pf-simple .ui-dialog .grid-table {
 
         const saved = this.clickSave(dialog);
         if (!saved) {
-          if (debugNativeEnabled()) {
-            leaveOpenForDebug = true;
-            throw new Error(
-              'Tlačítko Uložit nenalezeno. Dialog nechávám otevřený. ' +
-                this.describeDialogFields(dialog)
-            );
-          }
           throw new Error(
             'V portálu se nepodařilo najít tlačítko Uložit.'
           );
@@ -10588,19 +10438,14 @@ body.pf-simple .ui-dialog .grid-table {
               portalErr ||
               /chyba|povinn|neplatn|vyplnte|vyplňte/.test(errText)
             ) {
-              if (debugNativeEnabled()) leaveOpenForDebug = true;
               throw new Error(
                 'Portál hlášení neuložil' +
                   (portalErr ? ': ' + portalErr : '.') +
-                  (snap ? ' (' + snap + ')' : '') +
-                  (debugNativeEnabled()
-                    ? ''
-                    : ' Tip: #pfDebugNative=1 zobrazí původní dialog.')
+                  (snap ? ' (' + snap + ')' : '')
               );
             }
           }
-          if (!debugNativeEnabled()) this.closeNativeDialog(dialog);
-          else leaveOpenForDebug = true;
+          this.closeNativeDialog(dialog);
         }
 
         // Refresh pending-changes strip and verify a row appeared when possible
@@ -10625,14 +10470,13 @@ body.pf-simple .ui-dialog .grid-table {
           }
           if (pendingAfter <= pendingBefore) {
             throw new Error(
-              'Hlášení se neobjevilo v neodeslaných změnách. Zkuste akci znovu' +
-                ' (nebo #pfDebugNative=1 pro kontrolu portálového dialogu).'
+              'Hlášení se neobjevilo v neodeslaných změnách. Zkuste akci znovu.'
             );
           }
         } catch (ex) {
           if (
             ex &&
-            /neobjevilo|neuložil|nepodařilo|pfDebugNative/.test(
+            /neobjevilo|neuložil|nepodařilo/.test(
               String(ex.message || ex)
             )
           )
@@ -10640,34 +10484,27 @@ body.pf-simple .ui-dialog .grid-table {
         }
         // "Poslední změna" comes from processed history (stav=zpracováno), not pending saves
       } catch (e) {
-        if (!leaveOpenForDebug) {
-          try {
-            this.closeNativeDialog(dialog);
-          } catch (_) {}
-        }
+        try {
+          this.closeNativeDialog(dialog);
+        } catch (_) {}
         throw e instanceof Error
           ? e
           : new Error(e && e.message ? e.message : String(e));
       } finally {
-        if (!leaveOpenForDebug) {
+        this.endNativeFill();
+        setTimeout(() => {
           this.endNativeFill();
-          setTimeout(() => {
-            this.endNativeFill();
-            // Sweep any leftover invisible overlays
-            qsa('.ui-widget-overlay').forEach((ov) => {
-              if (window.getComputedStyle(ov).opacity === '0') ov.remove();
-            });
-            // Only reset host if no dialog is active (don't abort late AJAX)
-            if (!this.activeDialog()) {
-              try {
-                PF.registers.resetDialogHost();
-              } catch (_) {}
-            }
-          }, 800);
-        } else {
-          // Debug: keep native fill class so dialog stays styled/visible
-          document.body.classList.add('pf-debug-native');
-        }
+          // Sweep any leftover invisible overlays
+          qsa('.ui-widget-overlay').forEach((ov) => {
+            if (window.getComputedStyle(ov).opacity === '0') ov.remove();
+          });
+          // Only reset host if no dialog is active (don't abort late AJAX)
+          if (!this.activeDialog()) {
+            try {
+              PF.registers.resetDialogHost();
+            } catch (_) {}
+          }
+        }, 800);
       }
     },
   };
@@ -12781,22 +12618,10 @@ body.pf-simple .ui-dialog .grid-table {
 
     beginNativeFill() {
       document.body.classList.add('pf-native-sheep-fill');
-      if (debugNativeEnabled()) {
-        document.body.classList.add('pf-debug-native');
-      } else {
-        document.body.classList.remove('pf-debug-native');
-      }
     },
 
-    endNativeFill(leaveOpenForDebug) {
-      if (leaveOpenForDebug && debugNativeEnabled()) {
-        // Keep pf-native-sheep-fill + pf-debug-native so the portal dialog stays visible
-        return;
-      }
+    endNativeFill() {
       document.body.classList.remove('pf-native-sheep-fill');
-      if (!debugNativeEnabled()) {
-        document.body.classList.remove('pf-debug-native');
-      }
     },
 
     describeDialogFields(dialog) {
@@ -12804,10 +12629,9 @@ body.pf-simple .ui-dialog .grid-table {
     },
 
     async runNative(typ, data) {
-      // Hide native DialogPorizeni while filling (unless #pfDebugNative=1)
+      // Hide native DialogPorizeni while filling
       this.beginNativeFill();
       let dialog = null;
-      let leaveOpenForDebug = false;
       try {
         const ears = (
           data.ears && data.ears.length
@@ -12845,12 +12669,6 @@ body.pf-simple .ui-dialog .grid-table {
         // Stáj must be chosen via autocomplete (LookupKey) before save
         const stableOk = await this.fillStable(dialog);
         if (!stableOk) {
-          if (debugNativeEnabled()) {
-            leaveOpenForDebug = true;
-            throw new Error(
-              'Stáj se nepodařilo vybrat z nápovědy. Dialog nechávám otevřený.'
-            );
-          }
           throw new Error(
             'V portálu se nepodařilo vybrat stáj (Výběr z hodnot).'
           );
@@ -12884,23 +12702,14 @@ body.pf-simple .ui-dialog .grid-table {
         if (data.father) this.fillFather(dialog, data.father);
         this.fillNote(dialog, data.note);
 
-        // Hide stáj chrome after LookupKey is set (unless debugging)
-        if (!debugNativeEnabled()) this.hideStableFields(dialog);
+        // Hide stáj chrome after LookupKey is set
+        this.hideStableFields(dialog);
 
-        await new Promise((r) =>
-          setTimeout(r, debugNativeEnabled() ? 400 : 200)
-        );
+        await new Promise((r) => setTimeout(r, 200));
         dialog = this.activeDialog() || dialog;
 
         const saved = this.clickSave(dialog);
         if (!saved) {
-          if (debugNativeEnabled()) {
-            leaveOpenForDebug = true;
-            throw new Error(
-              'Tlačítko Uložit nenalezeno. Dialog nechávám otevřený. ' +
-                this.describeDialogFields(dialog)
-            );
-          }
           throw new Error('V portálu se nepodařilo najít tlačítko Uložit.');
         }
 
@@ -12913,18 +12722,10 @@ body.pf-simple .ui-dialog .grid-table {
               PF.pigForms.extractPortalErrors &&
               PF.pigForms.extractPortalErrors(still);
             if (portalErr) {
-              if (debugNativeEnabled()) leaveOpenForDebug = true;
-              throw new Error(
-                'Portál hlášení neuložil: ' +
-                  portalErr +
-                  (debugNativeEnabled()
-                    ? ' Dialog nechávám otevřený.'
-                    : ' Tip: #pfDebugNative=1 zobrazí původní dialog.')
-              );
+              throw new Error('Portál hlášení neuložil: ' + portalErr);
             }
           }
-          if (!debugNativeEnabled()) this.closeNativeDialog(dialog);
-          else leaveOpenForDebug = true;
+          this.closeNativeDialog(dialog);
         }
 
         try {
@@ -12959,24 +12760,20 @@ body.pf-simple .ui-dialog .grid-table {
 
         // "Poslední změna" comes from processed history (stav=zpracováno), not pending saves
       } catch (e) {
-        if (!leaveOpenForDebug) {
-          try {
-            this.closeNativeDialog(dialog);
-          } catch (_) {}
-        }
+        try {
+          this.closeNativeDialog(dialog);
+        } catch (_) {}
         throw e instanceof Error
           ? e
           : new Error(e && e.message ? e.message : String(e));
       } finally {
-        this.endNativeFill(leaveOpenForDebug);
-        if (!leaveOpenForDebug) {
-          setTimeout(() => {
-            document.body.classList.remove('pf-native-sheep-fill');
-            qsa('.ui-widget-overlay').forEach((ov) => {
-              if (window.getComputedStyle(ov).opacity === '0') ov.remove();
-            });
-          }, 200);
-        }
+        this.endNativeFill();
+        setTimeout(() => {
+          document.body.classList.remove('pf-native-sheep-fill');
+          qsa('.ui-widget-overlay').forEach((ov) => {
+            if (window.getComputedStyle(ov).opacity === '0') ov.remove();
+          });
+        }, 200);
       }
     },
   };
