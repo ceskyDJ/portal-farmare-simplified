@@ -1,0 +1,140 @@
+#!/usr/bin/env python3
+"""Stable Cursor end-of-turn banners: solid-fill ANSI art for DONE / HELP ME!.
+
+Usage: .cursor/bin/banner done|help
+Prints banner lines only (per-line color). Wrap stdout in an ansi fenced block.
+"""
+
+from __future__ import annotations
+
+import sys
+
+ESC = "\033"
+PAD_H = 2
+PAD_V = 1
+LETTER_GAP = 1
+
+GLYPHS: dict[str, list[str]] = {
+    "D": [
+        "████",
+        "█  █",
+        "█  █",
+        "█  █",
+        "████",
+    ],
+    "O": [
+        "████",
+        "█  █",
+        "█  █",
+        "█  █",
+        "████",
+    ],
+    "N": [
+        "█  █",
+        "██ █",
+        "█ ██",
+        "█  █",
+        "█  █",
+    ],
+    "E": [
+        "████",
+        "█   ",
+        "███ ",
+        "█   ",
+        "████",
+    ],
+    "H": [
+        "█  █",
+        "█  █",
+        "████",
+        "█  █",
+        "█  █",
+    ],
+    "L": [
+        "█   ",
+        "█   ",
+        "█   ",
+        "█   ",
+        "████",
+    ],
+    "P": [
+        "████",
+        "█  █",
+        "████",
+        "█   ",
+        "█   ",
+    ],
+    "M": [
+        "█   █",
+        "██ ██",
+        "█ █ █",
+        "█   █",
+        "█   █",
+    ],
+    "!": [
+        "█",
+        "█",
+        "█",
+        " ",
+        "█",
+    ],
+    " ": [
+        "  ",
+        "  ",
+        "  ",
+        "  ",
+        "  ",
+    ],
+}
+
+
+def render_phrase(phrase: str) -> list[str]:
+    rows = [""] * 5
+    first = True
+    for char in phrase:
+        key = " " if char == " " else char.upper()
+        if key not in GLYPHS:
+            print(f"banner: unsupported character {char!r}", file=sys.stderr)
+            sys.exit(1)
+        glyph = GLYPHS[key]
+        gap = "" if first or key == " " else " " * LETTER_GAP
+        first = False
+        for r in range(5):
+            rows[r] += gap + glyph[r]
+    return rows
+
+
+def wrap_banner(art_lines: list[str]) -> list[str]:
+    inner_width = max(len(line) for line in art_lines) + PAD_H * 2
+    blank = " " * inner_width
+    padded: list[str] = [blank] * PAD_V
+    content_width = inner_width - PAD_H * 2
+    for line in art_lines:
+        padded.append(" " * PAD_H + line.ljust(content_width) + " " * PAD_H)
+    padded.extend([blank] * PAD_V)
+
+    border = "+" + ("-" * inner_width) + "+"
+    out = [border]
+    for line in padded:
+        out.append("|" + line + "|")
+    out.append(border)
+    return out
+
+
+def main() -> None:
+    arg = (sys.argv[1] if len(sys.argv) > 1 else "").strip().lower()
+    if arg == "done":
+        phrase, color = "DONE", f"{ESC}[32m"
+    elif arg in {"help", "help-me", "helpme"}:
+        phrase, color = "HELP ME!", f"{ESC}[31m"
+    else:
+        print("Usage: .cursor/bin/banner done|help", file=sys.stderr)
+        sys.exit(1)
+
+    reset = f"{ESC}[0m"
+    for line in wrap_banner(render_phrase(phrase)):
+        sys.stdout.write(f"{color}{line}{reset}\n")
+
+
+if __name__ == "__main__":
+    main()
