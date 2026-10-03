@@ -11,7 +11,7 @@ Living description of `portal-farmare.user.js`: how it works, important decision
 
 ## Contents
 
-Current code baseline: **v1.3.87** (`portal-farmare.user.js`).
+Current code baseline: **v1.3.88** (`portal-farmare.user.js`).
 
 ### Purpose and scope
 
@@ -102,6 +102,7 @@ Also exported: `PF.flushHerdCache`.
 - **Změny/send URLs redirect to Registr `#pf-pending`** — Pending UX is embedded; separate send pages are not first-class UIs.
 - **Sheep pending = Indiv + Zmeny merge** — Display (note, sex, mother, dates) from Indiv pending/`stav=A`; cancel/send IDs and authoritative change labels from Zmeny; paint once both are ready.
 - **Sheep Historie enrichment from Indiv** — Pohyby grid has event `POZNAMKA` (e.g. “Domácí porážka;”) and no sex; before paint, fetch Indiv `stav=A` and show register animal note (`POZNZVIRE`) + sex stripe (same as pending). Drop Matka on history; put Stav last (same Stav-last order on pig Historie).
+- **Pig Historie / pending hide Konečný stav** — Column dropped from simplified tables; native `KONECNYSTAV` still scraped for Registr headcount / Poslední změna.
 - **Herd vs pending split** — Unsent outbound animals can leave the “platné” herd filter; force `stavZvirat=A` and keep processed-in-ÚE but unsent outbound rows visible until send.
 - **Pig Registr is summary-only** — Headcount + Poslední změna from first **zpracováno** history row’s **Konečný stav** / date on the Prasata grid — not a full animal list.
 - **localStorage herd / last-change caches** — Useful across navigations; must invalidate after successful ÚE send (`invalidateHerdCaches`); manual recovery via `#pfFlushCache=1` / `PF.flushHerdCache()`.

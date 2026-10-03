@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Portál farmáře – zjednodušený (prasata + ovce)
 // @namespace    https://github.com/ceskyDJ/portal-farmare-simplified
-// @version      1.3.87
+// @version      1.3.88
 // @description  Jednoduchý dashboard a registry pro malého chovatele prasat a ovcí v Portálu farmáře / IZR
 // @author       Michal Šmahel (ceskyDJ)
 // @match        https://mze.gov.cz/ssl/app/izr2far/*
@@ -4228,6 +4228,16 @@ body.pf-simple .ui-dialog .grid-table {
               )
             )
               return;
+            if (
+              kind.includes('pig') &&
+              (col === 'KONECNYSTAV' ||
+                /konecnystav|konecny_stav|stavkonecn/.test(
+                  norm(label + ' ' + col).replace(/\s/g, '')
+                ) ||
+                (/konecn/.test(norm(label + ' ' + col)) &&
+                  /stav/.test(norm(label + ' ' + col))))
+            )
+              return;
             keepIdx.push(idx);
           });
         }
@@ -5925,6 +5935,15 @@ body.pf-simple .ui-dialog .grid-table {
           /datum\s*aktualiz|dataktual|aktualizace/.test(blob))
       )
         return false;
+      // Pig history / pending: drop Konečný stav (keep plain Stav); still scraped for headcount
+      if (
+        (kind === 'pig-history' || kind === 'pig-send') &&
+        (col === 'konecnystav' ||
+          /konecnystav|konecny_stav|stavkonecn/.test(blob.replace(/\s/g, '')) ||
+          (/konecn/.test(blob) && /stav/.test(blob) && !/pocatec/.test(blob)))
+      ) {
+        return false;
+      }
       // Pig female/sow columns only matter on pig pages
       if (kind.startsWith('pig') && (this.isExcludedColumn(label) || this.isExcludedColumn(col)))
         return false;
@@ -8080,6 +8099,16 @@ body.pf-simple .ui-dialog .grid-table {
                 /datum\s*aktualiz|dataktual|aktualizace/.test(
                   norm(label + ' ' + col)
                 ))
+            )
+              return;
+            if (
+              (kind === 'pig-history' || kind === 'pig-send') &&
+              (col === 'KONECNYSTAV' ||
+                /konecnystav|konecny_stav|stavkonecn/.test(
+                  norm(label + ' ' + col).replace(/\s/g, '')
+                ) ||
+                (/konecn/.test(norm(label + ' ' + col)) &&
+                  /stav/.test(norm(label + ' ' + col))))
             )
               return;
             if (
