@@ -11,7 +11,7 @@ Living description of `portal-farmare.user.js`: how it works, important decision
 
 ## Contents
 
-Current code baseline: **v1.4.4** (`portal-farmare.user.js`).
+Current code baseline: **v1.4.5** (`portal-farmare.user.js`).
 
 ### Purpose and scope
 
@@ -79,7 +79,7 @@ Global namespace: `window.PF`. Cross-cutting helpers (`jq`/`refresh$`, `norm`, `
 | **`PF.views`** | HTML templates only | `home`, `register`, `marks`, `other`, `icons` | Boot assigns `app.innerHTML`; host/toolbar/pending filled later |
 | **`PF.confirmDialog`** | Promise-based styled confirm | `function(opts) → Promise<boolean>` | Pending cancel / destructive flows |
 | **`PF.toast`** | Bottom-right toasts (success / error / info) | `announce`/`saved`, `flush`, `beginNavigate`, `installHooks` | Swallows portal flashes; `announce` stashes+queues; `flush` after boot/busy; ~12s duration; click toast to dismiss |
-| **`PF.pending`** | Neodeslané změny on Registr | `refresh`, `parse`, `apply`, `renderTable`, Indiv+Zmeny merge, native select / Odeslat / Smazat | Sheep display from Indiv; IDs/actions from Zmeny |
+| **`PF.pending`** | Neodeslané změny on Registr | `refresh`, `parse`, `apply`, `scrollToHashOnce`, `renderTable`, Indiv+Zmeny merge, native select / Odeslat / Smazat | Sheep display from Indiv; IDs/actions from Zmeny; `#pf-pending` smooth scroll yields to user scroll-up |
 | **`PF.registers`** | Move grids into `#pf-host`, toolbar, column filter, summaries | `refresh`, `moveContentToHost`, `buildToolbar`, `simplifyTables`, `render*RegisterSummary`, `invalidateHerdCaches` | Orchestrates pending on Registr |
 | **`PF.datePicker`** | Minimal Czech calendar popup | `attach`, `parse`/`format`, `enhanceDialog` | Pig: `maxDaysBack: 7`; sheep: no future |
 | **`PF.pigForms`** | Custom buy/kill → fill native DialogSRSkup / DialogPorizeni | `openBuy`/`openKill`, `runNative`, partner cache | Uses `holdBusy`, datePicker, cache invalidation after save |
@@ -101,6 +101,7 @@ Also exported: `PF.flushHerdCache`.
 - **Full custom overlay + off-screen native submit** — Farmer sees PF dialogs; portal DialogSRSkup / DialogPorizeni filled and saved hidden so the official post path stays authoritative.
 - **Pig history via `pfView=history`** — `StajovyRegistrPrasatPohyby` / `…Hlaseni` are dead/missing; history is the Prasata register grid itself.
 - **Změny/send URLs redirect to Registr `#pf-pending`** — Pending UX is embedded; separate send pages are not first-class UIs.
+- **`#pf-pending` auto-scroll is cancelable** — After pending paint, smooth-scroll to the section once; wheel/touch/key scroll-up interrupts it so the loader→content handoff does not fight the farmer.
 - **Sheep pending = Indiv + Zmeny merge** — Display (note, sex, mother, dates) from Indiv pending/`stav=A`; cancel/send IDs and authoritative change labels from Zmeny; paint once both are ready.
 - **Sheep Historie enrichment from Indiv** — Pohyby grid has event `POZNAMKA` (e.g. “Domácí porážka;”) and no sex; before paint, fetch Indiv `stav=A` and show register animal note (`POZNZVIRE`) + sex stripe (same as pending). Drop Matka on history; put Stav last (same Stav-last order on pig Historie).
 - **Pig Historie / pending hide Konečný stav** — Column dropped from simplified tables; native `KONECNYSTAV` still scraped for Registr headcount / Poslední změna.

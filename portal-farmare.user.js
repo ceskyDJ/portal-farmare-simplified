@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Portál farmáře – zjednodušený (prasata + ovce)
 // @namespace    https://github.com/ceskyDJ/portal-farmare-simplified
-// @version      1.4.4
+// @version      1.4.5
 // @description  Jednoduchý dashboard a registry pro malého chovatele prasat a ovcí v Portálu farmáře / IZR
 // @author       Michal Šmahel (ceskyDJ)
 // @match        https://mze.gov.cz/ssl/app/izr2far/*
@@ -5252,12 +5252,104 @@ body.pf-simple .ui-dialog .grid-table {
       this.setStatus('');
       this.renderTable();
 
-      if (location.hash === '#pf-pending') {
+      this.scrollToHashOnce();
+    },
+
+    /**
+     * Smooth-scroll to #pf-pending once after paint. If the user scrolls up
+     * (wheel / touch / keys), cancel so the page does not fight them.
+     */
+    scrollToHashOnce() {
+      if (location.hash !== '#pf-pending') return;
+      if (this._hashScrollDone) return;
+      this._hashScrollDone = true;
+      const sec = qs('#pf-pending-section');
+      if (!sec) return;
+
+      let cancelled = false;
+      let touchY = null;
+      let lastY = window.scrollY;
+      const opts = { capture: true, passive: true };
+
+      const cleanup = () => {
+        window.removeEventListener('wheel', onWheel, opts);
+        window.removeEventListener('touchstart', onTouchStart, opts);
+        window.removeEventListener('touchmove', onTouchMove, opts);
+        window.removeEventListener('keydown', onKey, opts);
+        window.removeEventListener('scroll', onScroll, opts);
+        if (this._hashScrollTimer != null) {
+          try {
+            clearTimeout(this._hashScrollTimer);
+          } catch (_) {}
+          this._hashScrollTimer = null;
+        }
+      };
+
+      const cancel = () => {
+        if (cancelled) return;
+        cancelled = true;
+        // Interrupt in-flight smooth scroll without jumping elsewhere
+        try {
+          window.scrollTo(window.scrollX, window.scrollY);
+        } catch (_) {}
+        cleanup();
+      };
+
+      const onWheel = (e) => {
+        if (e.deltaY < 0) cancel();
+      };
+      const onTouchStart = (e) => {
+        try {
+          touchY = e.touches && e.touches[0] ? e.touches[0].clientY : null;
+        } catch (_) {
+          touchY = null;
+        }
+      };
+      const onTouchMove = (e) => {
+        try {
+          const y = e.touches && e.touches[0] ? e.touches[0].clientY : null;
+          if (touchY != null && y != null && y - touchY > 8) cancel();
+          if (y != null) touchY = y;
+        } catch (_) {}
+      };
+      const onKey = (e) => {
+        if (
+          e.key === 'ArrowUp' ||
+          e.key === 'PageUp' ||
+          e.key === 'Home' ||
+          (e.key === ' ' && e.shiftKey)
+        ) {
+          cancel();
+        }
+      };
+      const onScroll = () => {
+        const y = window.scrollY;
+        if (y < lastY - 1) cancel();
+        else lastY = y;
+      };
+
+      window.addEventListener('wheel', onWheel, opts);
+      window.addEventListener('touchstart', onTouchStart, opts);
+      window.addEventListener('touchmove', onTouchMove, opts);
+      window.addEventListener('keydown', onKey, opts);
+      window.addEventListener('scroll', onScroll, opts);
+
+      this._hashScrollTimer = setTimeout(() => {
+        this._hashScrollTimer = null;
+        if (cancelled) return;
+        lastY = window.scrollY;
+        try {
+          sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } catch (_) {
+          try {
+            sec.scrollIntoView(true);
+          } catch (_) {}
+        }
+        // Drop listeners after the smooth scroll should have finished
         setTimeout(() => {
-          const sec = qs('#pf-pending-section');
-          if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 100);
-      }
+          if (!cancelled) cleanup();
+        }, 1500);
+      }, 100);
     },
 
     /** Ear → sex from Indiv A-list (includes založeno; herd simple table does not). */

@@ -26,6 +26,12 @@ Living log of non-trivial problems and how they were resolved. Agents maintain t
 
 <!-- Distilled from development sessions that built portal-farmare.user.js (primarily 2026-09-30 → 2026-10-01). Append new records below this line, newest first. -->
 
+### 2026-10-03 — pending-hash-scroll-fights-user [1.4.4→1.4.5]
+**When:** Registr with `#pf-pending` after boot/busy loader hide (pending count > 0, send redirect, or Registr tab link).
+**Core:** `apply()` always started a smooth `scrollIntoView` to the pending section right as the farmer overlay disappeared; no cancel on user input.
+**Symptoms:** Scrolling up immediately after the loader faded felt like the page was fighting and pulling back down.
+**Resolution:** `scrollToHashOnce()` — one cancelable smooth scroll; wheel/touch/key scroll-up (and upward scroll events) interrupt via `scrollTo(current)`.
+
 ### 2026-10-03 — toast-flash-before-reload [1.4.2→1.4.3]
 **When:** After custom toast copy (v1.4.2); sheep birth save and pending cancel.
 **Core:** `#messages-box` MutationObserver called `flush()`/`takeStash()` before navigation (toast painted then page reloaded); saves only queued in memory without stash (lost on reload).
