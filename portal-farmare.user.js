@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Portál farmáře – zjednodušený (prasata + ovce)
 // @namespace    https://github.com/ceskyDJ/portal-farmare-simplified
-// @version      1.4.3
+// @version      1.4.4
 // @description  Jednoduchý dashboard a registry pro malého chovatele prasat a ovcí v Portálu farmáře / IZR
 // @author       Michal Šmahel (ceskyDJ)
 // @match        https://mze.gov.cz/ssl/app/izr2far/*
@@ -489,10 +489,20 @@
       }
     },
 
+    _flushToastsWhenIdle() {
+      if (this._held || this._busyDepth > 0) return;
+      try {
+        if (PF.toast && typeof PF.toast.flush === 'function') PF.toast.flush();
+      } catch (_) {}
+    },
+
     _scheduleBusyHide() {
       if (this._held) return;
       const el = document.getElementById('pf-busy-loader');
-      if (!el) return;
+      if (!el) {
+        this._flushToastsWhenIdle();
+        return;
+      }
       if (this._hideTimer != null) {
         try {
           clearTimeout(this._hideTimer);
@@ -510,9 +520,7 @@
         }
         // Keep node mounted for next save — only clear on-state
         el.classList.remove('pf-busy-on', 'pf-busy-out');
-        try {
-          if (PF.toast && typeof PF.toast.flush === 'function') PF.toast.flush();
-        } catch (_) {}
+        this._flushToastsWhenIdle();
       }, 280);
     },
 
@@ -2419,10 +2427,11 @@ body.pf-simple .registrNeodeslane {
   background: var(--pf-accent) !important;
 }
 
-/* Toasts (top-right; replaces portal #messages-box) */
+/* Toasts (bottom-right; replaces portal #messages-box) */
 #pf-toast-root {
   position: fixed;
-  top: 16px;
+  top: auto;
+  bottom: 16px;
   right: 16px;
   z-index: 2147483600;
   display: flex;
@@ -2450,16 +2459,17 @@ body.pf-simple .registrNeodeslane {
   font-size: 0.95rem;
   font-weight: 500;
   line-height: 1.4;
-  transform: translateX(12px);
+  cursor: pointer;
+  transform: translateY(12px);
   opacity: 0;
   transition: transform 0.22s ease, opacity 0.22s ease;
 }
 .pf-toast.is-in {
-  transform: translateX(0);
+  transform: translateY(0);
   opacity: 1;
 }
 .pf-toast.is-out {
-  transform: translateX(16px);
+  transform: translateY(12px);
   opacity: 0;
 }
 .pf-toast-bar {
@@ -2509,7 +2519,8 @@ body.pf-simple .registrNeodeslane {
 }
 @media (max-width: 520px) {
   #pf-toast-root {
-    top: 10px;
+    top: auto;
+    bottom: 10px;
     right: 10px;
     left: 10px;
     max-width: none;
@@ -4327,12 +4338,13 @@ body.pf-simple .ui-dialog .grid-table {
       qs('.pf-toast-body', el).textContent = text;
       root.appendChild(el);
 
+      // Long enough to read; click the toast (or ×) to dismiss sooner
       const duration =
         typeof o.duration === 'number'
           ? o.duration
           : type === 'error'
-            ? 6500
-            : 4200;
+            ? 14000
+            : 12000;
       let hideTimer = null;
       const dismiss = () => {
         if (hideTimer != null) {
@@ -4355,13 +4367,10 @@ body.pf-simple .ui-dialog .grid-table {
         }, 240);
       };
 
-      qs('.pf-toast-close', el).addEventListener('click', (e) => {
-        e.preventDefault();
-        dismiss();
-      });
+      // Click anywhere on the toast (including ×) dismisses immediately
       el.addEventListener('click', (e) => {
-        if (e.target && e.target.closest && e.target.closest('.pf-toast-close'))
-          return;
+        e.preventDefault();
+        e.stopPropagation();
         dismiss();
       });
 
@@ -9959,6 +9968,12 @@ body.pf-simple .ui-dialog .grid-table {
           .then(() => {
             this.closeModal();
             PF.loader.releaseBusy();
+            // Busy-hide may be interrupted by portal progress — ensure toast flush
+            setTimeout(() => {
+              try {
+                PF.toast.flush();
+              } catch (_) {}
+            }, 450);
           })
           .catch((ex) => {
             okBtn.disabled = false;
@@ -11345,6 +11360,11 @@ body.pf-simple .ui-dialog .grid-table {
           this.closeNativeDialog(dialog);
         }
 
+        // Announce as soon as portal accepted the save (before slow pending refresh)
+        try {
+          PF.toast.saved('pig', typ, data);
+        } catch (_) {}
+
         // Refresh pending-changes strip and verify a row appeared when possible
         try {
           PF.pending._loadedKind = null;
@@ -11380,9 +11400,6 @@ body.pf-simple .ui-dialog .grid-table {
             throw ex;
         }
         // "Poslední změna" comes from processed history (stav=zpracováno), not pending saves
-        try {
-          PF.toast.saved('pig', typ, data);
-        } catch (_) {}
       } catch (e) {
         try {
           this.closeNativeDialog(dialog);
@@ -12523,6 +12540,12 @@ body.pf-simple .ui-dialog .grid-table {
           .then(() => {
             this.closeModal();
             PF.loader.releaseBusy();
+            // Busy-hide may be interrupted by portal progress — ensure toast flush
+            setTimeout(() => {
+              try {
+                PF.toast.flush();
+              } catch (_) {}
+            }, 450);
           })
           .catch((ex) => {
             okBtn.disabled = false;
@@ -13628,6 +13651,11 @@ body.pf-simple .ui-dialog .grid-table {
           this.closeNativeDialog(dialog);
         }
 
+        // Announce as soon as portal accepted the save (before slow pending refresh)
+        try {
+          PF.toast.saved('sheep', typ, data);
+        } catch (_) {}
+
         try {
           PF.pending._loadedKind = null;
           const pendingBefore =
@@ -13659,9 +13687,6 @@ body.pf-simple .ui-dialog .grid-table {
         } catch (_) {}
 
         // "Poslední změna" comes from processed history (stav=zpracováno), not pending saves
-        try {
-          PF.toast.saved('sheep', typ, data);
-        } catch (_) {}
       } catch (e) {
         try {
           this.closeNativeDialog(dialog);
