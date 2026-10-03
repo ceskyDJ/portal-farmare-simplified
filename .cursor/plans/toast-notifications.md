@@ -15,4 +15,4 @@ Replace portal `#messages-box` / `.message-box` ("Data byla uložena") with PF t
 9. Docs + semver bump; `node --check`.
 
 ## Placement
-Top-right — standard for LTR; away from primary reading/action column.
+Bottom-right — clearer than top-right (away from nav); click toast to dismiss early; ~12s auto-dismiss.

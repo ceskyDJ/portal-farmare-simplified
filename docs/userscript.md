@@ -78,7 +78,7 @@ Global namespace: `window.PF`. Cross-cutting helpers (`jq`/`refresh$`, `norm`, `
 | **`PF.shell`** | `#pf-app` mount, nav, context tabs, footer, pending banners | `ensure`, `navHtml`, `contextLinks`, `swapController`, `bindPigActionDelegation`, `bindFooter` | Pig toolbar clicks delegated to `PF.pigForms` |
 | **`PF.views`** | HTML templates only | `home`, `register`, `marks`, `other`, `icons` | Boot assigns `app.innerHTML`; host/toolbar/pending filled later |
 | **`PF.confirmDialog`** | Promise-based styled confirm | `function(opts) → Promise<boolean>` | Pending cancel / destructive flows |
-| **`PF.toast`** | Top-right toasts (success / error / info) | `announce`/`saved`, `flush`, `beginNavigate`, `installHooks` | Swallows portal flashes; `announce` stashes+queues (never paints early); `flush` only after boot/busy; survives reload |
+| **`PF.toast`** | Bottom-right toasts (success / error / info) | `announce`/`saved`, `flush`, `beginNavigate`, `installHooks` | Swallows portal flashes; `announce` stashes+queues; `flush` after boot/busy; ~12s duration; click toast to dismiss |
 | **`PF.pending`** | Neodeslané změny on Registr | `refresh`, `parse`, `apply`, `renderTable`, Indiv+Zmeny merge, native select / Odeslat / Smazat | Sheep display from Indiv; IDs/actions from Zmeny |
 | **`PF.registers`** | Move grids into `#pf-host`, toolbar, column filter, summaries | `refresh`, `moveContentToHost`, `buildToolbar`, `simplifyTables`, `render*RegisterSummary`, `invalidateHerdCaches` | Orchestrates pending on Registr |
 | **`PF.datePicker`** | Minimal Czech calendar popup | `attach`, `parse`/`format`, `enhanceDialog` | Pig: `maxDaysBack: 7`; sheep: no future |
@@ -108,7 +108,7 @@ Also exported: `PF.flushHerdCache`.
 - **Pig Registr is summary-only** — Headcount + Poslední změna from first **zpracováno** history row’s **Konečný stav** / date on the Prasata grid — not a full animal list.
 - **localStorage herd / last-change caches** — Useful across navigations; must invalidate after successful ÚE send (`invalidateHerdCaches`); manual recovery via `#pfFlushCache=1` / `PF.flushHerdCache()`.
 - **Farmer overlay replaces `$.progressDialog`** — `holdBusy` survives portal open/close flicker during saves; idle overlay stays mounted but invisible.
-- **Toasts replace portal `#messages-box`** — Hide native boxes and swallow `$.aq` copy. Action outcomes use `PF.toast.announce` / `saved` (sessionStorage + queue, never paint immediately). `flush()` runs only after boot/busy hide; `beginNavigate()` blocks paint before `location` changes so cancel/send don’t flash then vanish. Stash clears on toast dismiss so a reload mid-toast can restore it once.
+- **Toasts replace portal `#messages-box`** — Bottom-right; hide native boxes and swallow `$.aq` copy. Action outcomes use `PF.toast.announce` / `saved` (sessionStorage + queue). `flush()` after boot/busy hide (plus a post-save retry so portal progress cannot skip it). ~12s auto-dismiss; click the toast to hide sooner. `beginNavigate()` blocks paint before full navigations.
 - **Toolbar event delegation** (`data-pf-pig`) — Toolbar HTML rebuilds often; delegated clicks on `#pf-app` survive rebuilds.
 - **Settled summaries (`dataset.pfSettled`)** — Once painted, skip full refresh teardown to avoid “Načítám…” flicker / pending loops.
 - **ajaxComplete filters** — Ignore `pfInternal`, dead Prasata URLs, Zmeny fetches, `ChangeRowState`, dialog loads so helper traffic doesn’t rebuild the shell.
