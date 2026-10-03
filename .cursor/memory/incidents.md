@@ -26,6 +26,12 @@ Living log of non-trivial problems and how they were resolved. Agents maintain t
 
 <!-- Distilled from development sessions that built portal-farmare.user.js (primarily 2026-09-30 → 2026-10-01). Append new records below this line, newest first. -->
 
+### 2026-10-03 — toast-flash-before-reload [1.4.2→1.4.3]
+**When:** After custom toast copy (v1.4.2); sheep birth save and pending cancel.
+**Core:** `#messages-box` MutationObserver called `flush()`/`takeStash()` before navigation (toast painted then page reloaded); saves only queued in memory without stash (lost on reload).
+**Symptoms:** Cancel toast visible for a moment until reload; birth toast never appeared after reload/animation.
+**Resolution:** `announce()` stashes+queues without painting; observer only strips portal nodes; `beginNavigate()` blocks paint before `location` changes; `flush()` after boot/busy; stash cleared on dismiss for reload recovery.
+
 ### 2026-10-03 — toast-hidden-under-boot-busy [1.4.0→1.4.1]
 **When:** After introducing `PF.toast` (v1.4.0); sheep birth save and pending cancel.
 **Core:** Toasts painted (or portal `#messages-box` flashes discarded) while boot/busy overlays covered the screen; dismiss timers started under the overlay; cancel navigations wiped in-memory toasts and the hook swept server-rendered boxes without adopting them.
