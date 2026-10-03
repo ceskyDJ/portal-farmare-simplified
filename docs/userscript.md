@@ -11,7 +11,7 @@ Living description of `portal-farmare.user.js`: how it works, important decision
 
 ## Contents
 
-Current code baseline: **v1.3.88** (`portal-farmare.user.js`).
+Current code baseline: **v1.4.0** (`portal-farmare.user.js`).
 
 ### Purpose and scope
 
@@ -78,6 +78,7 @@ Global namespace: `window.PF`. Cross-cutting helpers (`jq`/`refresh$`, `norm`, `
 | **`PF.shell`** | `#pf-app` mount, nav, context tabs, footer, pending banners | `ensure`, `navHtml`, `contextLinks`, `swapController`, `bindPigActionDelegation`, `bindFooter` | Pig toolbar clicks delegated to `PF.pigForms` |
 | **`PF.views`** | HTML templates only | `home`, `register`, `marks`, `other`, `icons` | Boot assigns `app.innerHTML`; host/toolbar/pending filled later |
 | **`PF.confirmDialog`** | Promise-based styled confirm | `function(opts) → Promise<boolean>` | Pending cancel / destructive flows |
+| **`PF.toast`** | Top-right toasts (success / error / info) | `success`/`error`/`info`/`show`, `installHooks` | Hooks `$.aq.zobrazitZpravu` / `zobrazitChybu`; replaces portal `#messages-box` and action `alert()`s |
 | **`PF.pending`** | Neodeslané změny on Registr | `refresh`, `parse`, `apply`, `renderTable`, Indiv+Zmeny merge, native select / Odeslat / Smazat | Sheep display from Indiv; IDs/actions from Zmeny |
 | **`PF.registers`** | Move grids into `#pf-host`, toolbar, column filter, summaries | `refresh`, `moveContentToHost`, `buildToolbar`, `simplifyTables`, `render*RegisterSummary`, `invalidateHerdCaches` | Orchestrates pending on Registr |
 | **`PF.datePicker`** | Minimal Czech calendar popup | `attach`, `parse`/`format`, `enhanceDialog` | Pig: `maxDaysBack: 7`; sheep: no future |
@@ -107,6 +108,7 @@ Also exported: `PF.flushHerdCache`.
 - **Pig Registr is summary-only** — Headcount + Poslední změna from first **zpracováno** history row’s **Konečný stav** / date on the Prasata grid — not a full animal list.
 - **localStorage herd / last-change caches** — Useful across navigations; must invalidate after successful ÚE send (`invalidateHerdCaches`); manual recovery via `#pfFlushCache=1` / `PF.flushHerdCache()`.
 - **Farmer overlay replaces `$.progressDialog`** — `holdBusy` survives portal open/close flicker during saves; idle overlay stays mounted but invisible.
+- **Toasts replace portal `#messages-box`** — Hide native green/red message boxes; route `$.aq.zobrazitZpravu` / `zobrazitChybu` into `PF.toast` (top-right). Action failures that used `alert()` also go through toasts; in-modal field validation stays in the form.
 - **Toolbar event delegation** (`data-pf-pig`) — Toolbar HTML rebuilds often; delegated clicks on `#pf-app` survive rebuilds.
 - **Settled summaries (`dataset.pfSettled`)** — Once painted, skip full refresh teardown to avoid “Načítám…” flicker / pending loops.
 - **ajaxComplete filters** — Ignore `pfInternal`, dead Prasata URLs, Zmeny fetches, `ChangeRowState`, dialog loads so helper traffic doesn’t rebuild the shell.
@@ -145,7 +147,7 @@ Also exported: `PF.flushHerdCache`.
 - Fragile: portal grid AJAX timing, dialog init order, caption/`data-colname` text, Zmeny vs Indiv shape, species row icons on MujSubjekt, dead pig grid URLs (`isDeadUrl` / `markDeadUrl`).
 - CSS may use modern selectors (e.g. `:has(.progress-dialog)`); JS progress hooks still run when CSS alone is incomplete.
 - Single-stable assumption: farm/stable pickers hidden — multi-stable accounts will look wrong.
-- Intentionally non-features: print/export, grid filter UI, native pending yellow banner (replaced by `.pf-pending-hint`), pig 7-day ÚE movements link.
+- Intentionally non-features: print/export, grid filter UI, native pending yellow banner (replaced by `.pf-pending-hint`), native `#messages-box` toasts (replaced by `PF.toast`), pig 7-day ÚE movements link.
 - If simplified sheep table fails, native grid is left visible rather than blank host.
 - Disable path leaves a pulse FAB “Zapnout jednoduchý režim”.
 

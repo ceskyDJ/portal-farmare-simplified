@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Portál farmáře – zjednodušený (prasata + ovce)
 // @namespace    https://github.com/ceskyDJ/portal-farmare-simplified
-// @version      1.3.88
+// @version      1.4.0
 // @description  Jednoduchý dashboard a registry pro malého chovatele prasat a ovcí v Portálu farmáře / IZR
 // @author       Michal Šmahel (ceskyDJ)
 // @match        https://mze.gov.cz/ssl/app/izr2far/*
@@ -1150,6 +1150,15 @@ body.pf-simple.pf-register #main > *:not(#pf-app):not(.ui-dialog):not(#messages-
   clip-path: inset(50%) !important;
   border: 0 !important;
   opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Portal message toasts → PF.toast (keep #messages-box in DOM for $.aq appends) */
+body.pf-simple #messages-box,
+body.pf-simple #messages-box .message-box,
+body.pf-simple #messages-box .errormessage-box {
+  display: none !important;
+  visibility: hidden !important;
   pointer-events: none !important;
 }
 
@@ -2402,6 +2411,105 @@ body.pf-simple .registrNeodeslane {
   filter: brightness(0.95);
   background: var(--pf-accent) !important;
 }
+
+/* Toasts (top-right; replaces portal #messages-box) */
+#pf-toast-root {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 2147483600;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  max-width: min(380px, calc(100vw - 24px));
+  width: max-content;
+  pointer-events: none;
+  font-family: var(--pf-font);
+}
+.pf-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px 12px 14px;
+  border-radius: 12px;
+  background: var(--pf-card);
+  color: var(--pf-ink);
+  border: 1px solid var(--pf-line);
+  box-shadow: 0 10px 28px rgba(26, 36, 24, 0.14);
+  font-size: 0.95rem;
+  font-weight: 500;
+  line-height: 1.4;
+  transform: translateX(12px);
+  opacity: 0;
+  transition: transform 0.22s ease, opacity 0.22s ease;
+}
+.pf-toast.is-in {
+  transform: translateX(0);
+  opacity: 1;
+}
+.pf-toast.is-out {
+  transform: translateX(16px);
+  opacity: 0;
+}
+.pf-toast-bar {
+  flex: 0 0 4px;
+  align-self: stretch;
+  border-radius: 4px;
+  margin: -2px 0;
+  background: var(--pf-muted);
+}
+.pf-toast-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-top: 1px;
+}
+.pf-toast-close {
+  flex: 0 0 auto;
+  margin: -4px -6px -4px 0;
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  color: var(--pf-muted);
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 8px;
+}
+.pf-toast-close:hover {
+  color: var(--pf-ink);
+  background: rgba(26, 36, 24, 0.06);
+}
+.pf-toast.is-success .pf-toast-bar {
+  background: var(--pf-green-2);
+}
+.pf-toast.is-success {
+  border-color: rgba(47, 93, 44, 0.28);
+  background: linear-gradient(135deg, #fffdf8 0%, #eef5ea 100%);
+}
+.pf-toast.is-error .pf-toast-bar {
+  background: var(--pf-accent);
+}
+.pf-toast.is-error {
+  border-color: rgba(196, 92, 38, 0.35);
+  background: linear-gradient(135deg, #fffdf8 0%, #f8efe8 100%);
+}
+.pf-toast.is-info .pf-toast-bar {
+  background: var(--pf-sex-male);
+}
+@media (max-width: 520px) {
+  #pf-toast-root {
+    top: 10px;
+    right: 10px;
+    left: 10px;
+    max-width: none;
+    align-items: stretch;
+  }
+}
+
 body.pf-native-pig-fill .ui-dialog,
 body.pf-native-pig-fill .ui-widget-overlay,
 body.pf-native-pig-fill .ui-dialog-titlebar,
@@ -3380,7 +3488,7 @@ body.pf-simple .ui-dialog .grid-table {
           if (typ === 'NakupPrisun') PF.pigForms.openBuy();
           else if (typ === 'DomaciPorazka') PF.pigForms.openKill();
         } catch (err) {
-          alert(
+          PF.toast.error(
             'Akci se nepodařilo otevřít: ' +
               (err && err.message ? err.message : err)
           );
@@ -3870,6 +3978,171 @@ body.pf-simple .ui-dialog .grid-table {
       }, 30);
     });
   };
+
+  /* ------------------------------------------------------------------ */
+  /* Toasts (styled replacement for portal #messages-box / alert)       */
+  /* ------------------------------------------------------------------ */
+  PF.toast = {
+    _root: null,
+    _seq: 0,
+
+    ensureRoot() {
+      let root = this._root || qs('#pf-toast-root');
+      if (root && root.isConnected) {
+        this._root = root;
+        return root;
+      }
+      root = document.createElement('div');
+      root.id = 'pf-toast-root';
+      root.setAttribute('aria-live', 'polite');
+      root.setAttribute('aria-relevant', 'additions');
+      (document.body || document.documentElement).appendChild(root);
+      this._root = root;
+      return root;
+    },
+
+    /** Strip portal HTML fragments to plain text. */
+    plain(message) {
+      const raw = String(message == null ? '' : message).trim();
+      if (!raw) return '';
+      if (!/[<>&]/.test(raw)) return raw;
+      try {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = raw;
+        return String(tmp.textContent || tmp.innerText || '')
+          .replace(/\s+/g, ' ')
+          .trim();
+      } catch (_) {
+        return raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+      }
+    },
+
+    show(message, opts) {
+      const o = opts || {};
+      const type = o.type === 'error' || o.type === 'info' ? o.type : 'success';
+      const text = this.plain(message);
+      if (!text) return null;
+      if (!earlyEnabled() && !isEnabled()) return null;
+
+      const root = this.ensureRoot();
+      const el = document.createElement('div');
+      const id = 'pf-toast-' + ++this._seq;
+      el.id = id;
+      el.className = 'pf-toast is-' + type;
+      el.setAttribute('role', type === 'error' ? 'alert' : 'status');
+      el.innerHTML =
+        '<span class="pf-toast-bar" aria-hidden="true"></span>' +
+        '<div class="pf-toast-body"></div>' +
+        '<button type="button" class="pf-toast-close" aria-label="Zavřít">×</button>';
+      qs('.pf-toast-body', el).textContent = text;
+      root.appendChild(el);
+
+      const duration =
+        typeof o.duration === 'number'
+          ? o.duration
+          : type === 'error'
+            ? 6500
+            : 4200;
+      let hideTimer = null;
+      const dismiss = () => {
+        if (hideTimer != null) {
+          try {
+            clearTimeout(hideTimer);
+          } catch (_) {}
+          hideTimer = null;
+        }
+        el.classList.remove('is-in');
+        el.classList.add('is-out');
+        setTimeout(() => {
+          try {
+            el.remove();
+          } catch (_) {}
+        }, 240);
+      };
+
+      qs('.pf-toast-close', el).addEventListener('click', (e) => {
+        e.preventDefault();
+        dismiss();
+      });
+      el.addEventListener('click', (e) => {
+        if (e.target && e.target.closest && e.target.closest('.pf-toast-close'))
+          return;
+        dismiss();
+      });
+
+      requestAnimationFrame(() => {
+        el.classList.add('is-in');
+      });
+      if (duration > 0) hideTimer = setTimeout(dismiss, duration);
+      return { id, dismiss };
+    },
+
+    success(message, opts) {
+      return this.show(message, Object.assign({}, opts, { type: 'success' }));
+    },
+    error(message, opts) {
+      return this.show(message, Object.assign({}, opts, { type: 'error' }));
+    },
+    info(message, opts) {
+      return this.show(message, Object.assign({}, opts, { type: 'info' }));
+    },
+
+    /**
+     * Route portal $.aq.zobrazitZpravu / zobrazitChybu into PF toasts.
+     * Native #messages-box stays hidden via CSS.
+     */
+    installHooks() {
+      if (!earlyEnabled()) return;
+      const tryHook = () => {
+        const $ = window.jQuery || window.$;
+        if (!$ || !$.aq) return false;
+        if ($.aq._pfToastHooked) return true;
+
+        const origOk = $.aq.zobrazitZpravu;
+        const origErr = $.aq.zobrazitChybu;
+
+        $.aq.zobrazitZpravu = function (message) {
+          if (!earlyEnabled()) {
+            if (typeof origOk === 'function') return origOk.apply(this, arguments);
+            return;
+          }
+          PF.toast.success(message);
+        };
+        $.aq.zobrazitChybu = function (message) {
+          if (!earlyEnabled()) {
+            if (typeof origErr === 'function')
+              return origErr.apply(this, arguments);
+            return;
+          }
+          PF.toast.error(message);
+        };
+        $.aq._pfToastHooked = true;
+
+        // Sweep any portal boxes that already rendered
+        try {
+          qsa(
+            '#messages-box .message-box, #messages-box .errormessage-box'
+          ).forEach((n) => n.remove());
+        } catch (_) {}
+        return true;
+      };
+
+      if (tryHook()) return;
+      if (this._hookTimer) return;
+      let n = 0;
+      this._hookTimer = setInterval(() => {
+        n += 1;
+        if (tryHook() || n > 200) {
+          clearInterval(this._hookTimer);
+          this._hookTimer = null;
+        }
+      }, 50);
+    },
+  };
+
+  if (earlyEnabled()) {
+    PF.toast.installHooks();
+  }
 
   /* ------------------------------------------------------------------ */
   /* Pending changes (embedded on Registr)                              */
@@ -5162,7 +5435,7 @@ body.pf-simple .ui-dialog .grid-table {
         await this.setRowState(ids, true);
       } catch (_) {}
       if (this.state.odeslatHref) this.go(this.state.odeslatHref);
-      else alert('Tlačítko Odeslat nebylo v portálu nalezeno.');
+      else PF.toast.error('Tlačítko Odeslat nebylo v portálu nalezeno.');
     },
 
     async cancelRow(idx) {
@@ -5204,7 +5477,7 @@ body.pf-simple .ui-dialog .grid-table {
         }
       } catch (ex) {
         this.setStatus('');
-        alert(
+        PF.toast.error(
           'Zrušení se nepodařilo: ' +
             (ex && ex.message ? ex.message : String(ex))
         );
@@ -5240,7 +5513,7 @@ body.pf-simple .ui-dialog .grid-table {
         await this.runNativeSmazat(null, { allowKOdeslaniFallback: true });
       } catch (ex) {
         this.setStatus('');
-        alert(
+        PF.toast.error(
           'Zrušení se nepodařilo: ' +
             (ex && ex.message ? ex.message : String(ex))
         );
@@ -5503,6 +5776,7 @@ body.pf-simple .ui-dialog .grid-table {
         e.preventDefault();
         if (btn.classList.contains('is-disabled') || btn.getAttribute('aria-disabled') === 'true') {
           e.stopPropagation();
+          if (btn.dataset.pfWarn) PF.toast.info(btn.dataset.pfWarn);
           return;
         }
         // Sheep: never click native otevritDialogZmeny — it calls .dialog('close')
@@ -5512,7 +5786,7 @@ body.pf-simple .ui-dialog .grid-table {
           try {
             PF.registers.openSheepDialog(sheepTyp);
           } catch (err) {
-            alert(
+            PF.toast.error(
               'Akci se nepodařilo otevřít: ' +
                 (err && err.message ? err.message : err)
             );
@@ -5642,7 +5916,7 @@ body.pf-simple .ui-dialog .grid-table {
             if (a.typ === 'NakupPrisun') PF.pigForms.openBuy();
             else if (a.typ === 'DomaciPorazka') PF.pigForms.openKill();
           } catch (err) {
-            alert(
+            PF.toast.error(
               'Akci se nepodařilo otevřít: ' +
                 (err && err.message ? err.message : err)
             );
@@ -5700,12 +5974,13 @@ body.pf-simple .ui-dialog .grid-table {
             b.getAttribute('aria-disabled') === 'true'
           ) {
             e.stopPropagation();
+            if (b.dataset.pfWarn) PF.toast.info(b.dataset.pfWarn);
             return;
           }
           try {
             PF.registers.openSheepDialog(a.typ);
           } catch (err) {
-            alert(
+            PF.toast.error(
               'Akci se nepodařilo otevřít: ' +
                 (err && err.message ? err.message : err)
             );
@@ -13525,6 +13800,7 @@ body.pf-simple .ui-dialog .grid-table {
     document.body.classList.add('pf-simple');
     PF.style.inject();
     PF.loader.installProgressHooks();
+    PF.toast.installHooks();
 
     const kind = pageKind();
     if (kind === 'home') document.body.classList.add('pf-home');
