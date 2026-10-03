@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Portál farmáře – zjednodušený (prasata + ovce)
 // @namespace    https://github.com/ceskyDJ/portal-farmare-simplified
-// @version      1.4.5
+// @version      1.4.6
 // @description  Jednoduchý dashboard a registry pro malého chovatele prasat a ovcí v Portálu farmáře / IZR
 // @author       Michal Šmahel (ceskyDJ)
 // @match        https://mze.gov.cz/ssl/app/izr2far/*
@@ -9979,9 +9979,15 @@ body.pf-simple .ui-dialog .grid-table {
         this.validatePigField(t, dateOpts);
       };
       form.addEventListener('change', revalidate);
+      // Blur live-check only while focus stays inside the dialog.
+      // Backdrop / Cancel move focus out and would flash red errors on dismiss.
       form.addEventListener(
         'blur',
         (e) => {
+          const modalRoot = form.closest('.pf-modal') || form;
+          const next = e.relatedTarget;
+          if (!next || !modalRoot.contains(next)) return;
+          if (next.id === 'pf-pig-cancel') return;
           revalidate(e);
         },
         true
@@ -12557,7 +12563,19 @@ body.pf-simple .ui-dialog .grid-table {
         this.validateSheepField(t, options);
       };
       form.addEventListener('change', revalidate);
-      form.addEventListener('blur', revalidate, true);
+      // Blur live-check only while focus stays inside the dialog.
+      // Backdrop / Cancel move focus out and would flash red errors on dismiss.
+      form.addEventListener(
+        'blur',
+        (e) => {
+          const modalRoot = form.closest('.pf-modal') || form;
+          const next = e.relatedTarget;
+          if (!next || !modalRoot.contains(next)) return;
+          if (next.id === 'pf-sheep-cancel') return;
+          revalidate(e);
+        },
+        true
+      );
     },
 
     showModal({ title, fieldsHtml, onSubmit, wide, validateOpts, afterOpen }) {
