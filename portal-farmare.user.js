@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Portál farmáře – zjednodušený (prasata + ovce)
 // @namespace    https://github.com/ceskyDJ/portal-farmare-simplified
-// @version      1.4.1
+// @version      1.4.2
 // @description  Jednoduchý dashboard a registry pro malého chovatele prasat a ovcí v Portálu farmáře / IZR
 // @author       Michal Šmahel (ceskyDJ)
 // @match        https://mze.gov.cz/ssl/app/izr2far/*
@@ -4086,21 +4086,141 @@ body.pf-simple .ui-dialog .grid-table {
     },
 
     /**
-     * Read portal #messages-box nodes into the queue, then remove them.
-     * Needed after full-page navigations (cancel/send) that render the flash in HTML.
+     * Drop portal #messages-box nodes without showing their copy.
+     * Farmer-facing text comes only from PF.toast.saved / stash / error helpers.
      */
     consumePortalBoxes() {
       const nodes = qsa(
         '#messages-box .message-box, #messages-box .errormessage-box, #messages-box .message-error'
       );
       nodes.forEach((n) => {
-        const type = /error/i.test(n.className || '') ? 'error' : 'success';
-        const text = this.plain(textOf(n) || n.textContent);
-        if (text) this.enqueue(text, type);
         try {
           n.remove();
         } catch (_) {}
       });
+    },
+
+    /** Short ear-mark label for toast copy (keep last meaningful chunk). */
+    _earLabel(ear) {
+      const s = String(ear || '').replace(/\s+/g, ' ').trim();
+      if (!s) return '';
+      // Prefer trailing national number chunk when present (e.g. "CZ… 956")
+      const parts = s.split(' ').filter(Boolean);
+      if (parts.length >= 2 && /^\d{2,}$/.test(parts[parts.length - 1])) {
+        return parts.slice(-2).join(' ');
+      }
+      return s.length > 28 ? s.slice(0, 26) + '…' : s;
+    },
+
+    _countFromData(data) {
+      const d = data || {};
+      if (Array.isArray(d.ears) && d.ears.length) return d.ears.length;
+      if (d.ear) return 1;
+      const n = Number(d.count);
+      if (Number.isFinite(n) && n > 0) return Math.floor(n);
+      return 0;
+    },
+
+    /**
+     * Farmer-friendly success copy for a saved register action.
+     * kind: 'sheep' | 'pig'; typ: portal typZmeny; data: form payload.
+     */
+    describeSaved(kind, typ, data) {
+      const d = data || {};
+      const n = this._countFromData(d);
+      const ear = this._earLabel(d.ear || (d.ears && d.ears[0]) || '');
+      const pending = ' mezi neodeslané změny';
+      const isSheep = String(kind || '').startsWith('sheep');
+
+      if (isSheep) {
+        if (typ === 'Narozeni') {
+          return ear
+            ? 'Narození ovce ' + ear + ' bylo přidáno' + pending + '.'
+            : 'Narození ovce bylo přidáno' + pending + '.';
+        }
+        if (typ === 'NakupPrisun') {
+          return ear
+            ? 'Nákup / přísun ovce ' + ear + ' byl přidán' + pending + '.'
+            : 'Nákup / přísun ovce byl přidán' + pending + '.';
+        }
+        if (typ === 'ProdejOdsun') {
+          if (n > 1)
+            return (
+              'Prodej / odsun ' +
+              n +
+              ' ' +
+              czechWord(n, 'ovce', 'ovce', 'ovcí') +
+              ' byl přidán' +
+              pending +
+              '.'
+            );
+          return ear
+            ? 'Prodej / odsun ovce ' + ear + ' byl přidán' + pending + '.'
+            : 'Prodej / odsun ovce byl přidán' + pending + '.';
+        }
+        if (typ === 'DomaciPorazka') {
+          if (n > 1)
+            return (
+              'Domácí porážka ' +
+              n +
+              ' ' +
+              czechWord(n, 'ovce', 'ovce', 'ovcí') +
+              ' byla přidána' +
+              pending +
+              '.'
+            );
+          return ear
+            ? 'Domácí porážka ovce ' + ear + ' byla přidána' + pending + '.'
+            : 'Domácí porážka ovce byla přidána' + pending + '.';
+        }
+        if (typ === 'Zcizeni') {
+          if (n > 1)
+            return (
+              'Zcizení ' +
+              n +
+              ' ' +
+              czechWord(n, 'ovce', 'ovce', 'ovcí') +
+              ' bylo přidáno' +
+              pending +
+              '.'
+            );
+          return ear
+            ? 'Zcizení ovce ' + ear + ' bylo přidáno' + pending + '.'
+            : 'Zcizení ovce bylo přidáno' + pending + '.';
+        }
+        return 'Změna v registru ovcí byla přidána' + pending + '.';
+      }
+
+      // pigs
+      const pigsWord = czechWord(n || 1, 'prase', 'prasata', 'prasat');
+      if (typ === 'NakupPrisun') {
+        if (n > 0)
+          return (
+            'Nákup / přísun ' + n + ' ' + pigsWord + ' byl přidán' + pending + '.'
+          );
+        return 'Nákup / přísun prasat byl přidán' + pending + '.';
+      }
+      if (typ === 'DomaciPorazka') {
+        if (n > 0)
+          return (
+            'Domácí porážka ' +
+            n +
+            ' ' +
+            pigsWord +
+            ' byla přidána' +
+            pending +
+            '.'
+          );
+        return 'Domácí porážka prasat byla přidána' + pending + '.';
+      }
+      return 'Změna v registru prasat byla přidána' + pending + '.';
+    },
+
+    /** Queue/show a contextual success toast for a completed register action. */
+    saved(kind, typ, data) {
+      const msg = this.describeSaved(kind, typ, data);
+      if (msg) return this.success(msg);
+      return null;
     },
 
     watchPortalBoxes() {
@@ -4237,8 +4357,8 @@ body.pf-simple .ui-dialog .grid-table {
     },
 
     /**
-     * Route portal $.aq.zobrazitZpravu / zobrazitChybu into PF toasts.
-     * Native #messages-box stays hidden via CSS.
+     * Swallow portal $.aq.zobrazitZpravu / zobrazitChybu (unfriendly copy).
+     * Native #messages-box stays hidden; PF owns farmer-facing text.
      */
     installHooks() {
       if (!earlyEnabled()) return;
@@ -4259,7 +4379,7 @@ body.pf-simple .ui-dialog .grid-table {
             if (typeof origOk === 'function') return origOk.apply(this, arguments);
             return;
           }
-          PF.toast.success(message);
+          // Ignore portal success flashes ("Data byla uložena", …)
         };
         $.aq.zobrazitChybu = function (message) {
           if (!earlyEnabled()) {
@@ -4267,11 +4387,10 @@ body.pf-simple .ui-dialog .grid-table {
               return origErr.apply(this, arguments);
             return;
           }
-          PF.toast.error(message);
+          // Ignore portal error flashes — PF surfaces failures in-modal / PF.toast.error
         };
         $.aq._pfToastHooked = true;
 
-        // Adopt any flash already in the DOM (do not drop it)
         try {
           PF.toast.consumePortalBoxes();
         } catch (_) {}
@@ -5586,7 +5705,11 @@ body.pf-simple .ui-dialog .grid-table {
         await this.setRowState(ids, true);
       } catch (_) {}
       if (this.state.odeslatHref) {
-        PF.toast.stash('Změny se odesílají do ústřední evidence…', 'info');
+        const n = this.state.rows.length;
+        PF.toast.stash(
+          'Odesílám ' + CZ.allChangesPhrase(n) + ' do ústřední evidence…',
+          'info'
+        );
         this.go(this.state.odeslatHref);
       } else PF.toast.error('Tlačítko Odeslat nebylo v portálu nalezeno.');
     },
@@ -5612,7 +5735,10 @@ body.pf-simple .ui-dialog .grid-table {
           try {
             await this.setRowState([row.id], true);
           } catch (_) {}
-          PF.toast.stash('Neodeslaná změna byla zrušena.', 'success');
+          PF.toast.stash(
+            'Neodeslaná změna byla zrušena a neodejde do evidence.',
+            'success'
+          );
           this.go(this.state.smazatHref);
           return;
         }
@@ -5621,12 +5747,16 @@ body.pf-simple .ui-dialog .grid-table {
           await this.runNativeSmazat(ids && ids.length ? ids : null, {
             allowKOdeslaniFallback: false,
           });
-          PF.toast.success('Neodeslaná změna byla zrušena.');
+          PF.toast.success(
+            'Neodeslaná změna byla zrušena a neodejde do evidence.'
+          );
         } catch (ex) {
           // If this is the only pending row, select the sole "K odeslání" line
           if (this.state.rows.length === 1) {
             await this.runNativeSmazat(null);
-            PF.toast.success('Neodeslaná změna byla zrušena.');
+            PF.toast.success(
+              'Neodeslaná změna byla zrušena a neodejde do evidence.'
+            );
           } else {
             throw ex;
           }
@@ -5662,13 +5792,18 @@ body.pf-simple .ui-dialog .grid-table {
           try {
             await this.setRowState(ids, true);
           } catch (_) {}
-          PF.toast.stash('Neodeslané změny byly zrušeny.', 'success');
+          PF.toast.stash(
+            'Všechny neodeslané změny byly zrušeny a neodejdou do evidence.',
+            'success'
+          );
           this.go(this.state.smazatHref);
           return;
         }
         // All "K odeslání" rows (ids from Zmeny may not match register grid)
         await this.runNativeSmazat(null, { allowKOdeslaniFallback: true });
-        PF.toast.success('Neodeslané změny byly zrušeny.');
+        PF.toast.success(
+          'Všechny neodeslané změny byly zrušeny a neodejdou do evidence.'
+        );
       } catch (ex) {
         this.setStatus('');
         PF.toast.error(
@@ -11191,6 +11326,9 @@ body.pf-simple .ui-dialog .grid-table {
             throw ex;
         }
         // "Poslední změna" comes from processed history (stav=zpracováno), not pending saves
+        try {
+          PF.toast.saved('pig', typ, data);
+        } catch (_) {}
       } catch (e) {
         try {
           this.closeNativeDialog(dialog);
@@ -13467,6 +13605,9 @@ body.pf-simple .ui-dialog .grid-table {
         } catch (_) {}
 
         // "Poslední změna" comes from processed history (stav=zpracováno), not pending saves
+        try {
+          PF.toast.saved('sheep', typ, data);
+        } catch (_) {}
       } catch (e) {
         try {
           this.closeNativeDialog(dialog);
