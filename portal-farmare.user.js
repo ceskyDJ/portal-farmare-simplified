@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Portál farmáře – zjednodušený (prasata + ovce)
 // @namespace    https://github.com/ceskyDJ/portal-farmare-simplified
-// @version      1.3.86
+// @version      1.3.87
 // @description  Jednoduchý dashboard a registry pro malého chovatele prasat a ovcí v Portálu farmáře / IZR
 // @author       Michal Šmahel (ceskyDJ)
 // @match        https://mze.gov.cz/ssl/app/izr2far/*
@@ -7997,8 +7997,11 @@ body.pf-simple .ui-dialog .grid-table {
           if (notes.length) keepIdx.splice(0, keepIdx.length, ...rest, ...notes);
         }
 
-        // Sheep history: put Stav last
-        if (kind === 'sheep-history' && keepIdx.length > 1) {
+        // Sheep/pig history: put Stav last
+        if (
+          (kind === 'sheep-history' || kind === 'pig-history') &&
+          keepIdx.length > 1
+        ) {
           const isStavCol = (idx) => {
             const blob = norm(
               (labels[idx] || '') +
