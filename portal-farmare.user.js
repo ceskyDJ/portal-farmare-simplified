@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Portál farmáře – zjednodušený (prasata + ovce)
 // @namespace    https://github.com/ceskyDJ/portal-farmare-simplified
-// @version      1.4.6
+// @version      1.4.7
 // @description  Jednoduchý dashboard a registry pro malého chovatele prasat a ovcí v Portálu farmáře / IZR
 // @author       Michal Šmahel (ceskyDJ)
 // @match        https://mze.gov.cz/ssl/app/izr2far/*
@@ -11845,7 +11845,7 @@ body.pf-simple .ui-dialog .grid-table {
       const ph = document.createElement('option');
       ph.value = '';
       ph.textContent = list.length
-        ? 'Vyberte volnou známku…'
+        ? 'Vyberte ušní číslo, které mládě dostalo…'
         : sex
           ? 'Žádná volná známka pro toto pohlaví'
           : 'Žádná volná známka';
@@ -12744,14 +12744,6 @@ body.pf-simple .ui-dialog .grid-table {
         validateOpts: { needSex: true },
         fieldsHtml:
           '<div class="pf-modal-field">' +
-          '<label for="pf-sheep-form-mark">Ušní číslo (volná známka)</label>' +
-          '<select id="pf-sheep-form-mark" required aria-required="true">' +
-          '<option value="">Načítám známky…</option></select>' +
-          '<p class="pf-field-error" role="alert"></p>' +
-          '<p class="pf-modal-hint" id="pf-sheep-form-mark-hint"></p>' +
-          '</div>' +
-          this.dateFieldHtml('pf-sheep-form-date', 'Datum narození') +
-          '<div class="pf-modal-field">' +
           '<label for="pf-sheep-form-sex">Pohlaví</label>' +
           '<select id="pf-sheep-form-sex" required aria-required="true">' +
           '<option value="">Vyberte…</option>' +
@@ -12760,6 +12752,14 @@ body.pf-simple .ui-dialog .grid-table {
           '</select>' +
           '<p class="pf-field-error" role="alert"></p>' +
           '</div>' +
+          '<div class="pf-modal-field">' +
+          '<label for="pf-sheep-form-mark">Přiřazené ušní číslo</label>' +
+          '<select id="pf-sheep-form-mark" required aria-required="true">' +
+          '<option value="">Načítám známky…</option></select>' +
+          '<p class="pf-field-error" role="alert"></p>' +
+          '<p class="pf-modal-hint" id="pf-sheep-form-mark-hint"></p>' +
+          '</div>' +
+          this.dateFieldHtml('pf-sheep-form-date', 'Datum narození') +
           this.earSelectHtml(
             'pf-sheep-form-mother',
             'Ušní číslo matky',
@@ -12775,7 +12775,6 @@ body.pf-simple .ui-dialog .grid-table {
           this.noteFieldHtml(),
         afterOpen(wrap) {
           PF.datePicker.attach(qs('#pf-sheep-form-date', wrap), {});
-          const sel = qs('#pf-sheep-form-mark', wrap);
           const hint = qs('#pf-sheep-form-mark-hint', wrap);
           const sexSel = qs('#pf-sheep-form-sex', wrap);
           wrap._pfFreeMarks = [];
@@ -12787,6 +12786,17 @@ body.pf-simple .ui-dialog .grid-table {
               sex: sexSel ? String(sexSel.value || '').trim() : '',
               hint,
             });
+          };
+          const syncSexFromMark = () => {
+            const markSel = qs('#pf-sheep-form-mark', wrap);
+            if (!markSel || markSel.tagName !== 'SELECT' || !sexSel) return;
+            if (String(sexSel.value || '').trim()) return;
+            const ear = String(markSel.value || '').trim();
+            if (!ear) return;
+            const mark = (wrap._pfFreeMarks || []).find((m) => m.ear === ear);
+            if (!mark || (mark.sex !== 'male' && mark.sex !== 'female')) return;
+            sexSel.value = mark.sex;
+            refreshMarks();
           };
           if (sexSel) sexSel.addEventListener('change', refreshMarks);
           self.loadAvailableMarks().then((marks) => {
@@ -12810,6 +12820,9 @@ body.pf-simple .ui-dialog .grid-table {
               return;
             }
             refreshMarks();
+            const markSel = qs('#pf-sheep-form-mark', wrap);
+            if (markSel)
+              markSel.addEventListener('change', syncSexFromMark);
             if (hint) hint.textContent = '';
           });
         },

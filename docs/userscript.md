@@ -11,7 +11,7 @@ Living description of `portal-farmare.user.js`: how it works, important decision
 
 ## Contents
 
-Current code baseline: **v1.4.5** (`portal-farmare.user.js`).
+Current code baseline: **v1.4.7** (`portal-farmare.user.js`).
 
 ### Purpose and scope
 
@@ -83,7 +83,7 @@ Global namespace: `window.PF`. Cross-cutting helpers (`jq`/`refresh$`, `norm`, `
 | **`PF.registers`** | Move grids into `#pf-host`, toolbar, column filter, summaries | `refresh`, `moveContentToHost`, `buildToolbar`, `simplifyTables`, `render*RegisterSummary`, `invalidateHerdCaches` | Orchestrates pending on Registr |
 | **`PF.datePicker`** | Minimal Czech calendar popup | `attach`, `parse`/`format`, `enhanceDialog` | Pig: `maxDaysBack: 7`; sheep: no future |
 | **`PF.pigForms`** | Custom buy/kill → fill native DialogSRSkup / DialogPorizeni | `openBuy`/`openKill`, `runNative`, partner cache, live field validation | Uses `holdBusy`, datePicker, cache invalidation after save; blur validation skipped on dismiss |
-| **`PF.sheepForms`** | Custom modals for sheep action typs; free marks | `openByTyp`, `openBirth`/`openBuy`/`openOut`/`openKill`/`openStolen`, live field validation | Same native-fill pattern; NezaveseneZnamky; blur validation skipped on dismiss |
+| **`PF.sheepForms`** | Custom modals for sheep action typs; free marks | `openByTyp`, `openBirth`/`openBuy`/`openOut`/`openKill`/`openStolen`, live field validation | Same native-fill pattern; NezaveseneZnamky; birth: sex first (filters marks), mark can infer sex; blur validation skipped on dismiss |
 | **`PF.dialogs`** | Observe/skin/simplify native `.ui-dialog`; soft-safe close | `observe`, `skin`, `simplifyDialog`, `ensureSafeDialogApi` | Boot always starts observer |
 | **`PF.boot`** | Enable gate, redirects, first paint, ajaxComplete + MutationObserver | `PF.boot()` | Ties scrape → shell → views → registers/pending/dialogs |
 
@@ -116,6 +116,7 @@ Also exported: `PF.flushHerdCache`.
 - **Pigs ≠ sheep URL contracts** — Pig grids use `idStaje` / `idStajovyRegistr`; sheep Zmeny needs `druhKey` — never mix sheep-style query params into pig grids.
 - **Czech dates / friendly labels** — Farmer-facing `d. m. YYYY`; strip internal event codes; CZ plural helpers.
 - **Pig date window 7 days** — Matches portal pig reporting rules; sheep dates allow past only (no future).
+- **Birth dialog: sex before ear mark** — Free marks are sex-partitioned; choosing Pohlaví first narrows “Přiřazené ušní číslo”. If the farmer picks a mark with no sex yet, sex is filled from that mark’s metadata.
 - **Safe dialog close hooks** — Soften `.dialog('close')` on uninitialized placeholders without replacing the whole `$.fn.dialog` bridge (that broke ShowModalInner).
 - **Modal blur validation skips dismiss** — Live field checks run on `change` / in-dialog blur / submit. Backdrop click and Cancel move focus out of the dialog; those blurs must not paint red errors (flash before close). `relatedTarget` outside `.pf-modal` or Cancel → skip; field-to-field and Uložit still validate.
 - **Don’t invent portal DOM** — Prefer `sources/` HAR/HTML or a live DOM sample from the user; never hardcode personal/stable-specific data.
