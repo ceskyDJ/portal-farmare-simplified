@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Portál farmáře – zjednodušený (prasata + ovce)
 // @namespace    https://github.com/ceskyDJ/portal-farmare-simplified
-// @version      1.4.7
+// @version      1.4.8
 // @description  Jednoduchý dashboard a registry pro malého chovatele prasat a ovcí v Portálu farmáře / IZR
 // @author       Michal Šmahel (ceskyDJ)
 // @match        https://mze.gov.cz/ssl/app/izr2far/*
@@ -12796,6 +12796,9 @@ body.pf-simple .ui-dialog .grid-table {
             const mark = (wrap._pfFreeMarks || []).find((m) => m.ear === ear);
             if (!mark || (mark.sex !== 'male' && mark.sex !== 'female')) return;
             sexSel.value = mark.sex;
+            // Blur on empty sex (when jumping to the mark select) may have
+            // painted an error; .value assignment does not clear it.
+            self.validateSheepField(sexSel, { needSex: true });
             refreshMarks();
           };
           if (sexSel) sexSel.addEventListener('change', refreshMarks);
