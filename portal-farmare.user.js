@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         Portál farmáře – zjednodušený (prasata + ovce)
 // @namespace    https://github.com/ceskyDJ/portal-farmare-simplified
-// @version      1.3.83
+// @version      1.3.84
 // @description  Jednoduchý dashboard a registry pro malého chovatele prasat a ovcí v Portálu farmáře / IZR
 // @author       Michal Šmahel (ceskyDJ)
 // @match        https://mze.gov.cz/ssl/app/izr2far/*
 // @match        https://www.mze.gov.cz/ssl/app/izr2far/*
 // @run-at       document-start
 // @grant        none
+// @sandbox      raw
 // ==/UserScript==
 
 (function () {
@@ -740,13 +741,14 @@
   /* Utilities                                                          */
   /* ------------------------------------------------------------------ */
   // Prefer live lookup — jQuery is usually not ready at @run-at document-start
+  // (Firefox Tampermonkey often hits true document-start; Chrome may inject later).
   function jq() {
     return window.jQuery || window.$;
   }
-  // Keep `$` as a convenience that always resolves to the current jQuery
-  // (undefined until the portal loads it).
+  // Module-level `$` is filled only via refresh$() — never trust a document-start capture.
   // eslint-disable-next-line no-unused-vars
-  var $ = jq();
+  var $;
+  /** Resolve current page jQuery into `$` and return it. Call before every `$` use. */
   function refresh$() {
     $ = jq();
     return $;
@@ -1696,6 +1698,8 @@ a.pf-herd .pf-stat-split {
   opacity: 0.35;
   font-size: 1.2rem;
   font-weight: 400;
+  -webkit-user-select: none;
+  -moz-user-select: none;
   user-select: none;
   line-height: 1;
 }
@@ -2072,6 +2076,8 @@ body.pf-simple .registrNeodeslane {
   pointer-events: none !important;
 }
 .pf-pending-cancel {
+  -webkit-appearance: none;
+  -moz-appearance: none;
   appearance: none;
   border: 1px solid var(--pf-line);
   background: #fff;
@@ -3121,7 +3127,7 @@ body.pf-simple .ui-dialog .grid-table {
         }
       };
 
-      if ($ && $.ajax) {
+      if (refresh$() && $.ajax) {
         $.ajax({
           url: gridUrl,
           method: 'GET',
@@ -4039,7 +4045,7 @@ body.pf-simple .ui-dialog .grid-table {
       const get = (url) =>
         new Promise((resolve) => {
           if (!url) return resolve('');
-          if ($ && $.ajax) {
+          if (refresh$() && $.ajax) {
             $.ajax({
               url,
               method: 'GET',
@@ -4810,7 +4816,7 @@ body.pf-simple .ui-dialog .grid-table {
           encodeURIComponent(id) +
           '&state=' +
           (selected ? 'true' : 'false');
-        if ($ && $.ajax) {
+        if (refresh$() && $.ajax) {
           return new Promise((resolve) => {
             $.ajax({
               url,
@@ -4828,9 +4834,28 @@ body.pf-simple .ui-dialog .grid-table {
     go(href) {
       if (!href) return;
       if (/^javascript:/i.test(href)) {
+        const code = href.replace(/^javascript:/i, '');
+        // Prefer a live control with the same onclick — avoids eval under page CSP
+        // (Firefox Tampermonkey is stricter when CSP blocks unsafe-eval).
         try {
+          const normCode = code.replace(/\s+/g, ' ').trim();
+          const hit = qsa(
+            'a[onclick], button[onclick], input[onclick]'
+          ).find((el) => {
+            const oc = String(el.getAttribute('onclick') || '')
+              .replace(/\s+/g, ' ')
+              .trim();
+            return oc && (oc === normCode || normCode.indexOf(oc) === 0);
+          });
+          if (hit) {
+            hit.click();
+            return;
+          }
+        } catch (_) {}
+        try {
+          // Page-context fallback when the control is gone from the live DOM
           // eslint-disable-next-line no-eval
-          eval(href.replace(/^javascript:/i, ''));
+          eval(code);
         } catch (_) {}
         return;
       }
@@ -4982,7 +5007,7 @@ body.pf-simple .ui-dialog .grid-table {
           if (cb) {
             cb.checked = true;
             try {
-              if ($) $(cb).trigger('change');
+              if (refresh$()) $(cb).trigger('change');
               else cb.dispatchEvent(new Event('change', { bubbles: true }));
             } catch (_) {}
             selected += 1;
@@ -5048,7 +5073,7 @@ body.pf-simple .ui-dialog .grid-table {
         ano.click();
       } catch (_) {
         try {
-          if ($) $(ano).trigger('click');
+          if (refresh$()) $(ano).trigger('click');
         } catch (__) {}
       }
       // Brief pause so portal can start the delete request
@@ -5084,7 +5109,7 @@ body.pf-simple .ui-dialog .grid-table {
         btn.click();
       } catch (_) {
         try {
-          if ($) $(btn).trigger('click');
+          if (refresh$()) $(btn).trigger('click');
         } catch (__) {}
       }
 
@@ -5524,8 +5549,7 @@ body.pf-simple .ui-dialog .grid-table {
     },
 
     resetDialogHost() {
-      refresh$();
-      if (!$) return;
+      if (!refresh$()) return;
       try {
         const $d = $('#dialogDiv');
         if (!$d.length) return;
@@ -7016,7 +7040,7 @@ body.pf-simple .ui-dialog .grid-table {
           resolve('');
           return;
         }
-        if ($ && $.ajax) {
+        if (refresh$() && $.ajax) {
           $.ajax({
             url,
             method: 'GET',
@@ -7227,7 +7251,7 @@ body.pf-simple .ui-dialog .grid-table {
               cb(live.count != null && !live.weak ? live.count : null);
           }
         };
-        if ($ && $.ajax) {
+        if (refresh$() && $.ajax) {
           $.ajax({
             url: gridUrl,
             method: 'GET',
@@ -7353,7 +7377,7 @@ body.pf-simple .ui-dialog .grid-table {
                 });
               }
             };
-            if ($ && $.ajax) {
+            if (refresh$() && $.ajax) {
               $.ajax({
                 url: gridUrl,
                 method: 'GET',
@@ -8174,7 +8198,7 @@ body.pf-simple .ui-dialog .grid-table {
       if (!!cb.checked !== !!selected) {
         cb.checked = !!selected;
         try {
-          if ($ && $(cb).trigger) $(cb).trigger('change');
+          if (refresh$() && $(cb).trigger) $(cb).trigger('change');
           else cb.dispatchEvent(new Event('change', { bubbles: true }));
         } catch (_) {}
       }
@@ -8620,7 +8644,7 @@ body.pf-simple .ui-dialog .grid-table {
 
       // Drop native jQuery UI datepicker if present (sheep portal dialogs)
       try {
-        if ($ && input.classList.contains('hasDatepicker')) {
+        if (refresh$() && input.classList.contains('hasDatepicker')) {
           $(input).datepicker('destroy');
         }
       } catch (_) {}
@@ -8847,7 +8871,7 @@ body.pf-simple .ui-dialog .grid-table {
     fetchHtml(url) {
       return new Promise((resolve) => {
         if (!url) return resolve('');
-        if ($ && $.ajax) {
+        if (refresh$() && $.ajax) {
           $.ajax({
             url,
             method: 'GET',
@@ -9862,8 +9886,22 @@ body.pf-simple .ui-dialog .grid-table {
         'a[onclick*="zobrazitDialogSRSkup"], button[onclick*="zobrazitDialogSRSkup"], a[onclick*="DialogSRSkup"], a[href*="DialogSRSkup"]'
       )[0];
       if (opener) {
+        const oc = opener.getAttribute('onclick');
+        const href = opener.getAttribute('href') || '';
+        // Prefer .click() when it won't navigate away (CSP-safe vs new Function).
+        const clickSafe =
+          opener.tagName === 'BUTTON' ||
+          opener.tagName === 'INPUT' ||
+          !href ||
+          href === '#' ||
+          /^javascript:/i.test(href);
+        if (clickSafe) {
+          try {
+            opener.click();
+            return;
+          } catch (_) {}
+        }
         try {
-          const oc = opener.getAttribute('onclick');
           if (oc) {
             new Function(oc).call(opener);
             return;
@@ -9910,7 +9948,7 @@ body.pf-simple .ui-dialog .grid-table {
         el.value = v;
       }
       try {
-        if ($) {
+        if (refresh$()) {
           const $el = $(el);
           if (el.tagName === 'SELECT' && $el.data('select2')) {
             $el.val(el.value).trigger('change');
@@ -10000,7 +10038,7 @@ body.pf-simple .ui-dialog .grid-table {
       this.setNativeValue(sel, hit.value);
       // If change didn't fire portal handler (no jQuery), call it directly
       try {
-        if (!$ && typeof window.zmenaUdalosti === 'function') {
+        if (!refresh$() && typeof window.zmenaUdalosti === 'function') {
           const onchange = sel.getAttribute('onchange') || '';
           const m = onchange.match(
             /zmenaUdalosti\s*\(\s*this\s*,\s*['"]([^'"]+)['"]\s*\)/
@@ -10106,7 +10144,7 @@ body.pf-simple .ui-dialog .grid-table {
             dialog
           ).forEach((el) => {
             try {
-              if ($) $(el).trigger('change').trigger('blur');
+              if (refresh$()) $(el).trigger('change').trigger('blur');
               else el.dispatchEvent(new Event('change', { bubbles: true }));
             } catch (_) {}
           });
@@ -10166,7 +10204,7 @@ body.pf-simple .ui-dialog .grid-table {
         .forEach((el) => {
           try {
             el.dispatchEvent(new Event('blur', { bubbles: true }));
-            if ($) $(el).trigger('blur').trigger('change');
+            if (refresh$()) $(el).trigger('blur').trigger('change');
           } catch (_) {}
         });
 
@@ -10221,7 +10259,7 @@ body.pf-simple .ui-dialog .grid-table {
         });
       if (hit) {
         try {
-          if ($) $(hit).trigger('click');
+          if (refresh$()) $(hit).trigger('click');
           else hit.click();
         } catch (_) {
           try {
@@ -10307,13 +10345,13 @@ body.pf-simple .ui-dialog .grid-table {
       const d = dialog || this.activeDialog();
       if (!d) return;
       try {
-        if ($ && $(d).hasClass('ui-dialog') === false && $(d).dialog) {
+        if (refresh$() && $(d).hasClass('ui-dialog') === false && $(d).dialog) {
           $(d).dialog('close');
           return;
         }
       } catch (_) {}
       try {
-        const $dlg = $ && $(d).closest('.ui-dialog');
+        const $dlg = refresh$() && $(d).closest('.ui-dialog');
         if ($dlg && $dlg.length) {
           const widget = $dlg.find('.ui-dialog-content');
           if (widget.length && widget.dialog) {
@@ -11965,7 +12003,7 @@ body.pf-simple .ui-dialog .grid-table {
 
     trigger($el) {
       try {
-        if ($ && $el && $el.jquery) {
+        if (refresh$() && $el && $el.jquery) {
           $el.trigger('input').trigger('change');
         } else if ($el) {
           const el = $el[0] || $el;
@@ -11994,7 +12032,7 @@ body.pf-simple .ui-dialog .grid-table {
         el.value = v;
       }
       try {
-        if ($) {
+        if (refresh$()) {
           const $el = $(el);
           if (
             el.classList.contains('datepicker') ||
@@ -12023,7 +12061,7 @@ body.pf-simple .ui-dialog .grid-table {
             const opt = el.selectedOptions && el.selectedOptions[0];
             ac.value = opt ? textOf(opt) : v;
           } else ac.value = v;
-          if ($) $(ac).trigger('input').trigger('change');
+          if (refresh$()) $(ac).trigger('input').trigger('change');
         }
       } catch (_) {}
       // Sync aq Selected param for combo-editors
@@ -12070,7 +12108,7 @@ body.pf-simple .ui-dialog .grid-table {
       const btn = box && qs('a.autocomplete-button', box);
       try {
         if (btn) btn.click();
-        else if ($ && $(inp).data('ui-autocomplete')) {
+        else if (refresh$() && $(inp).data('ui-autocomplete')) {
           $(inp).autocomplete('search', ' ');
           $(inp).focus();
         } else return false;
@@ -12093,7 +12131,7 @@ body.pf-simple .ui-dialog .grid-table {
       const target = qs('.ui-menu-item-wrapper', pick) || pick;
       let itemId = '';
       try {
-        if ($) {
+        if (refresh$()) {
           const uiItem =
             $(pick).data('ui-autocomplete-item') ||
             $(target).data('ui-autocomplete-item');
@@ -12131,7 +12169,7 @@ body.pf-simple .ui-dialog .grid-table {
       if (lookupKey && key) {
         lookupKey.value = key;
         try {
-          if ($) $(lookupKey).trigger('change');
+          if (refresh$()) $(lookupKey).trigger('change');
           else this.trigger(lookupKey);
         } catch (_) {}
       } else {
@@ -12173,7 +12211,7 @@ body.pf-simple .ui-dialog .grid-table {
       if (lookupKey) {
         lookupKey.value = key;
         try {
-          if ($) $(lookupKey).trigger('change');
+          if (refresh$()) $(lookupKey).trigger('change');
           else this.trigger(lookupKey);
         } catch (_) {}
       }
@@ -12356,7 +12394,7 @@ body.pf-simple .ui-dialog .grid-table {
       qsa(
         'input.nactiNazevSubjektuPartnera, input.nactiNazevPartnera, .rsri-provozovna',
         dialog
-      ).forEach((el) => this.trigger($ ? $(el) : el));
+      ).forEach((el) => this.trigger(refresh$() ? $(el) : el));
       return ok;
     },
 
@@ -12581,7 +12619,7 @@ body.pf-simple .ui-dialog .grid-table {
             if (hit) this.setNativeValue(el, hit.value);
           } else if (el.type === 'checkbox' || el.type === 'radio') {
             el.checked = byWalk;
-            this.trigger($ ? $(el) : el);
+            this.trigger(refresh$() ? $(el) : el);
           }
         }
       );
@@ -12833,6 +12871,7 @@ body.pf-simple .ui-dialog .grid-table {
           !window.closeModal._pfSafe
         ) {
           window.closeModal = function () {
+            refresh$();
             try {
               const $d = $('#dialogDiv');
               if ($d.length && $d.data('ui-dialog')) {
@@ -12852,7 +12891,7 @@ body.pf-simple .ui-dialog .grid-table {
       } catch (_) {}
 
       try {
-        if ($ && $.fn && $.fn.dialog && !$.fn.dialog._pfSafeClose) {
+        if (refresh$() && $.fn && $.fn.dialog && !$.fn.dialog._pfSafeClose) {
           const orig = $.fn.dialog;
           $.fn.dialog = function (method) {
             if (
@@ -13134,7 +13173,7 @@ body.pf-simple .ui-dialog .grid-table {
         if (hit) {
           sel.value = hit.value;
           try {
-            if ($) $(sel).trigger('change');
+            if (refresh$()) $(sel).trigger('change');
             else sel.dispatchEvent(new Event('change', { bubbles: true }));
           } catch (_) {}
           this.forceFemaleZero(dialog);
@@ -13365,8 +13404,11 @@ body.pf-simple .ui-dialog .grid-table {
       }, 120);
     };
 
-    // Wait for AJAX grids
-    if ($) {
+    // Wait for AJAX grids — jQuery may arrive after document-start (esp. Firefox TM).
+    let ajaxCompleteBound = false;
+    const bindAjaxComplete = () => {
+      if (ajaxCompleteBound) return true;
+      if (!refresh$()) return false;
       $(document).ajaxComplete((_event, _xhr, settings) => {
         // Ignore our own helper requests (and the bad Prasata URL that used to 500-loop)
         if (settings && settings.pfInternal) return;
@@ -13411,6 +13453,15 @@ body.pf-simple .ui-dialog .grid-table {
           }
         }, 50);
       });
+      ajaxCompleteBound = true;
+      return true;
+    };
+    if (!bindAjaxComplete()) {
+      let n = 0;
+      const t = setInterval(() => {
+        n += 1;
+        if (bindAjaxComplete() || n > 200) clearInterval(t);
+      }, 50);
     }
 
     const mo = new MutationObserver(() => {

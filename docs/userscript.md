@@ -93,9 +93,9 @@ Also exported: `PF.flushHerdCache`.
 ### Important decisions (and why)
 
 - **`@run-at document-start` + early loader** — Hide native FOUC; show farmer overlay before portal chrome; install progress hooks as soon as jQuery exists.
-- **`@grant none`** — Stay in page JS context to call portal jQuery / `otevritDialogZmeny` / dialogs without GM sandbox bridges.
+- **`@grant none` + `@sandbox raw`** — Stay in page JS context (Tampermonkey MAIN_WORLD) to call portal jQuery / `otevritDialogZmeny` / dialogs without GM sandbox bridges / `cloneInto`.
 - **Hide native UI, rebuild shell** — CSS keeps original nodes off-layout but reachable; scrapers and form fillers still need live portal DOM.
-- **Live jQuery lookup (`jq`/`refresh$`)** — Never bind `$` once at startup; portal loads jQuery after document-start (binding early caused `$.aq` / progressDialog failures).
+- **Live jQuery lookup (`jq`/`refresh$`)** — Never trust a document-start `$` capture; call `refresh$()` before every `$` use. Portal loads jQuery after document-start (early binding caused `$.aq` / progressDialog / `ajaxComplete` failures — worse on Firefox’s true `document-start`).
 - **`PF._pfQuietMutate` / `PF._pfMutating`** — PF DOM writes must not re-enter the body MutationObserver (refresh storms / resource exhaustion).
 - **Full custom overlay + off-screen native submit** — Farmer sees PF dialogs; portal DialogSRSkup / DialogPorizeni filled and saved hidden so the official post path stays authoritative.
 - **Pig history via `pfView=history`** — `StajovyRegistrPrasatPohyby` / `…Hlaseni` are dead/missing; history is the Prasata register grid itself.
@@ -139,7 +139,7 @@ Also exported: `PF.flushHerdCache`.
 
 ### Stability and compatibility notes
 
-- Targets Chromium **and** Firefox userscript hosts; `@grant none` means page CSP/jQuery availability matter more than GM APIs.
+- Targets Chromium **and** Firefox via Tampermonkey; `@grant none` + `@sandbox raw` prefer page context. Page CSP/jQuery timing matter more than GM APIs — prefer `.click()` over `eval`/`new Function` when driving portal controls.
 - Fragile: portal grid AJAX timing, dialog init order, caption/`data-colname` text, Zmeny vs Indiv shape, species row icons on MujSubjekt, dead pig grid URLs (`isDeadUrl` / `markDeadUrl`).
 - CSS may use modern selectors (e.g. `:has(.progress-dialog)`); JS progress hooks still run when CSS alone is incomplete.
 - Single-stable assumption: farm/stable pickers hidden — multi-stable accounts will look wrong.
