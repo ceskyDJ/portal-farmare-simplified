@@ -15,7 +15,7 @@ Current code baseline: **v1.3.88** (`portal-farmare.user.js`).
 
 ### Purpose and scope
 
-Tampermonkey userscript **Portál farmáře – zjednodušený (prasata + ovce)** runs on `https://(www.)mze.gov.cz/ssl/app/izr2far/*`. It overlays a simplified Czech UI for a **small single-farm holder of pigs and sheep** on IZR / Portál farmáře.
+Tampermonkey userscript **Portál farmáře – zjednodušený (prasata + ovce)** runs on `https://mze.gov.cz/ssl/app/izr2far/*`. It overlays a simplified Czech UI for a **small single-farm holder of pigs and sheep** on IZR / Portál farmáře.
 
 **Does:**
 

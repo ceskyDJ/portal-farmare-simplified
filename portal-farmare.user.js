@@ -5,7 +5,6 @@
 // @description  Jednoduchý dashboard a registry pro malého chovatele prasat a ovcí v Portálu farmáře / IZR
 // @author       Michal Šmahel (ceskyDJ)
 // @match        https://mze.gov.cz/ssl/app/izr2far/*
-// @match        https://www.mze.gov.cz/ssl/app/izr2far/*
 // @run-at       document-start
 // @grant        none
 // @sandbox      raw

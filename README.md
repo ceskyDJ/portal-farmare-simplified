@@ -49,7 +49,7 @@ Repository: [github.com/ceskyDJ/portal-farmare-simplified](https://github.com/ce
 | Piece | Role |
 |--------|------|
 | **Tampermonkey** (or compatible userscript manager) | Installs and runs the script in your browser |
-| **`portal-farmare.user.js`** | Matches `https://(www.)mze.gov.cz/ssl/app/izr2far/*` and builds the overlay |
+| **`portal-farmare.user.js`** | Matches `https://mze.gov.cz/ssl/app/izr2far/*` and builds the overlay |
 | **Portál farmáře** | Remains the real system; the script only controls its UI |
 
 **Updates:** when a new version is published in this repository, reinstall or update the userscript from the same file (Tampermonkey’s update features apply if you install from a URL it can check). Always re-read the disclaimer and skim the diff if you care about what changed.
