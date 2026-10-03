@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Portál farmáře – zjednodušený (prasata + ovce)
 // @namespace    https://github.com/ceskyDJ/portal-farmare-simplified
-// @version      1.4.0
+// @version      1.4.1
 // @description  Jednoduchý dashboard a registry pro malého chovatele prasat a ovcí v Portálu farmáře / IZR
 // @author       Michal Šmahel (ceskyDJ)
 // @match        https://mze.gov.cz/ssl/app/izr2far/*
@@ -345,6 +345,10 @@
           const st = document.getElementById('pf-boot-style');
           if (st) st.remove();
         }
+        // Boot CSS hid all body children — show queued toasts only after overlay is gone
+        try {
+          if (PF.toast && typeof PF.toast.flush === 'function') PF.toast.flush();
+        } catch (_) {}
       };
       setTimeout(done, 300);
     },
@@ -506,6 +510,9 @@
         }
         // Keep node mounted for next save — only clear on-state
         el.classList.remove('pf-busy-on', 'pf-busy-out');
+        try {
+          if (PF.toast && typeof PF.toast.flush === 'function') PF.toast.flush();
+        } catch (_) {}
       }, 280);
     },
 
@@ -3985,6 +3992,9 @@ body.pf-simple .ui-dialog .grid-table {
   PF.toast = {
     _root: null,
     _seq: 0,
+    _queue: [],
+    _boxMo: null,
+    _hookTimer: null,
 
     ensureRoot() {
       let root = this._root || qs('#pf-toast-root');
@@ -4017,10 +4027,130 @@ body.pf-simple .ui-dialog .grid-table {
       }
     },
 
-    show(message, opts) {
-      const o = opts || {};
-      const type = o.type === 'error' || o.type === 'info' ? o.type : 'success';
+    /** Boot / busy overlays cover the screen — don't paint (or start timers) yet. */
+    isBlocked() {
+      try {
+        if (document.documentElement.classList.contains('pf-booting'))
+          return true;
+      } catch (_) {}
+      const boot = document.getElementById('pf-boot-loader');
+      if (boot) return true;
+      const busy = document.getElementById('pf-busy-loader');
+      if (busy && busy.classList.contains('pf-busy-on')) return true;
+      try {
+        if (PF.loader && (PF.loader._held || PF.loader._busyDepth > 0))
+          return true;
+      } catch (_) {}
+      return false;
+    },
+
+    enqueue(message, type) {
       const text = this.plain(message);
+      const t = type === 'error' || type === 'info' ? type : 'success';
+      if (!text) return;
+      const last = this._queue[this._queue.length - 1];
+      if (last && last.text === text && last.type === t) return;
+      this._queue.push({ text, type: t });
+    },
+
+    /**
+     * Survive full-page navigations (cancel/send). Restored on next boot via takeStash().
+     */
+    stash(message, type) {
+      const text = this.plain(message);
+      const t = type === 'error' || type === 'info' ? type : 'success';
+      if (!text) return;
+      try {
+        sessionStorage.setItem(
+          'pf-toast-stash',
+          JSON.stringify({ text, type: t, t: Date.now() })
+        );
+      } catch (_) {}
+    },
+
+    takeStash() {
+      let raw = null;
+      try {
+        raw = sessionStorage.getItem('pf-toast-stash');
+        if (raw) sessionStorage.removeItem('pf-toast-stash');
+      } catch (_) {
+        return;
+      }
+      if (!raw) return;
+      try {
+        const o = JSON.parse(raw);
+        if (!o || !o.text) return;
+        if (Date.now() - (Number(o.t) || 0) > 60000) return;
+        this.enqueue(o.text, o.type || 'success');
+      } catch (_) {}
+    },
+
+    /**
+     * Read portal #messages-box nodes into the queue, then remove them.
+     * Needed after full-page navigations (cancel/send) that render the flash in HTML.
+     */
+    consumePortalBoxes() {
+      const nodes = qsa(
+        '#messages-box .message-box, #messages-box .errormessage-box, #messages-box .message-error'
+      );
+      nodes.forEach((n) => {
+        const type = /error/i.test(n.className || '') ? 'error' : 'success';
+        const text = this.plain(textOf(n) || n.textContent);
+        if (text) this.enqueue(text, type);
+        try {
+          n.remove();
+        } catch (_) {}
+      });
+    },
+
+    watchPortalBoxes() {
+      if (this._boxMo) return;
+      const attach = () => {
+        const box = document.getElementById('messages-box');
+        if (!box) return false;
+        if (this._boxMo) return true;
+        this._boxMo = new MutationObserver(() => {
+          try {
+            this.consumePortalBoxes();
+            if (!this.isBlocked()) this.flush();
+          } catch (_) {}
+        });
+        this._boxMo.observe(box, { childList: true, subtree: true });
+        this.consumePortalBoxes();
+        return true;
+      };
+      if (attach()) return;
+      const mo = new MutationObserver(() => {
+        if (attach()) mo.disconnect();
+      });
+      mo.observe(document.documentElement, { childList: true, subtree: true });
+    },
+
+    /** Paint queued toasts once boot/busy overlays are gone. */
+    flush() {
+      if (!earlyEnabled() && !isEnabled()) {
+        this._queue.length = 0;
+        return;
+      }
+      try {
+        this.takeStash();
+      } catch (_) {}
+      try {
+        this.consumePortalBoxes();
+      } catch (_) {}
+      if (this.isBlocked()) return;
+      if (!this._queue.length) return;
+      const items = this._queue.splice(0, this._queue.length);
+      items.forEach((item, i) => {
+        // Stagger so multiple messages don't stack as one blink
+        setTimeout(() => {
+          this._paint(item.text, item.type, {});
+        }, i * 80);
+      });
+    },
+
+    _paint(text, type, opts) {
+      const o = opts || {};
       if (!text) return null;
       if (!earlyEnabled() && !isEnabled()) return null;
 
@@ -4070,11 +4200,30 @@ body.pf-simple .ui-dialog .grid-table {
         dismiss();
       });
 
-      requestAnimationFrame(() => {
+      const raf =
+        window.requestAnimationFrame ||
+        function (fn) {
+          return setTimeout(fn, 16);
+        };
+      raf(() => {
         el.classList.add('is-in');
       });
       if (duration > 0) hideTimer = setTimeout(dismiss, duration);
       return { id, dismiss };
+    },
+
+    show(message, opts) {
+      const o = opts || {};
+      const type = o.type === 'error' || o.type === 'info' ? o.type : 'success';
+      const text = this.plain(message);
+      if (!text) return null;
+      if (!earlyEnabled() && !isEnabled()) return null;
+      // During boot/busy: queue — timers must not start while the overlay covers us
+      if (this.isBlocked()) {
+        this.enqueue(text, type);
+        return null;
+      }
+      return this._paint(text, type, o);
     },
 
     success(message, opts) {
@@ -4093,6 +4242,10 @@ body.pf-simple .ui-dialog .grid-table {
      */
     installHooks() {
       if (!earlyEnabled()) return;
+      try {
+        this.takeStash();
+      } catch (_) {}
+      this.watchPortalBoxes();
       const tryHook = () => {
         const $ = window.jQuery || window.$;
         if (!$ || !$.aq) return false;
@@ -4118,11 +4271,9 @@ body.pf-simple .ui-dialog .grid-table {
         };
         $.aq._pfToastHooked = true;
 
-        // Sweep any portal boxes that already rendered
+        // Adopt any flash already in the DOM (do not drop it)
         try {
-          qsa(
-            '#messages-box .message-box, #messages-box .errormessage-box'
-          ).forEach((n) => n.remove());
+          PF.toast.consumePortalBoxes();
         } catch (_) {}
         return true;
       };
@@ -5434,8 +5585,10 @@ body.pf-simple .ui-dialog .grid-table {
       try {
         await this.setRowState(ids, true);
       } catch (_) {}
-      if (this.state.odeslatHref) this.go(this.state.odeslatHref);
-      else PF.toast.error('Tlačítko Odeslat nebylo v portálu nalezeno.');
+      if (this.state.odeslatHref) {
+        PF.toast.stash('Změny se odesílají do ústřední evidence…', 'info');
+        this.go(this.state.odeslatHref);
+      } else PF.toast.error('Tlačítko Odeslat nebylo v portálu nalezeno.');
     },
 
     async cancelRow(idx) {
@@ -5459,6 +5612,7 @@ body.pf-simple .ui-dialog .grid-table {
           try {
             await this.setRowState([row.id], true);
           } catch (_) {}
+          PF.toast.stash('Neodeslaná změna byla zrušena.', 'success');
           this.go(this.state.smazatHref);
           return;
         }
@@ -5467,10 +5621,12 @@ body.pf-simple .ui-dialog .grid-table {
           await this.runNativeSmazat(ids && ids.length ? ids : null, {
             allowKOdeslaniFallback: false,
           });
+          PF.toast.success('Neodeslaná změna byla zrušena.');
         } catch (ex) {
           // If this is the only pending row, select the sole "K odeslání" line
           if (this.state.rows.length === 1) {
             await this.runNativeSmazat(null);
+            PF.toast.success('Neodeslaná změna byla zrušena.');
           } else {
             throw ex;
           }
@@ -5506,11 +5662,13 @@ body.pf-simple .ui-dialog .grid-table {
           try {
             await this.setRowState(ids, true);
           } catch (_) {}
+          PF.toast.stash('Neodeslané změny byly zrušeny.', 'success');
           this.go(this.state.smazatHref);
           return;
         }
         // All "K odeslání" rows (ids from Zmeny may not match register grid)
         await this.runNativeSmazat(null, { allowKOdeslaniFallback: true });
+        PF.toast.success('Neodeslané změny byly zrušeny.');
       } catch (ex) {
         this.setStatus('');
         PF.toast.error(

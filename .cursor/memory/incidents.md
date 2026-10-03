@@ -26,6 +26,12 @@ Living log of non-trivial problems and how they were resolved. Agents maintain t
 
 <!-- Distilled from development sessions that built portal-farmare.user.js (primarily 2026-09-30 → 2026-10-01). Append new records below this line, newest first. -->
 
+### 2026-10-03 — toast-hidden-under-boot-busy [1.4.0→1.4.1]
+**When:** After introducing `PF.toast` (v1.4.0); sheep birth save and pending cancel.
+**Core:** Toasts painted (or portal `#messages-box` flashes discarded) while boot/busy overlays covered the screen; dismiss timers started under the overlay; cancel navigations wiped in-memory toasts and the hook swept server-rendered boxes without adopting them.
+**Symptoms:** No visible notifications after save/cancel; user wondered if messages appeared only under the loading animation.
+**Resolution:** Queue toasts while boot/busy is up; `flush()` after overlay hide; `consumePortalBoxes()` + MutationObserver; `sessionStorage` stash for cancel/send navigations.
+
 ### 2026-10-01 — sheep-pending-loader-until-ready [1.3.81]
 **When:** Sheep Registr — pending “Neodeslané změny” panel after Indiv/Zmeny dual-source work.
 **Core:** Pending UI painted from Indiv first, then Zmeny enriched fields later; loader released before both sources settled.
