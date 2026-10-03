@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Portál farmáře – zjednodušený (prasata + ovce)
 // @namespace    https://github.com/ceskyDJ/portal-farmare-simplified
-// @version      1.4.8
+// @version      1.4.9
 // @description  Jednoduchý dashboard a registry pro malého chovatele prasat a ovcí v Portálu farmáře / IZR
 // @author       Michal Šmahel (ceskyDJ)
 // @match        https://mze.gov.cz/ssl/app/izr2far/*
@@ -12572,6 +12572,15 @@ body.pf-simple .ui-dialog .grid-table {
           const next = e.relatedTarget;
           if (!next || !modalRoot.contains(next)) return;
           if (next.id === 'pf-sheep-cancel') return;
+          // Birth: sex ↔ assigned mark are linked; focusing the mark must not
+          // flash a sex error (mark selection may infer sex).
+          if (
+            e.target &&
+            e.target.id === 'pf-sheep-form-sex' &&
+            next.id === 'pf-sheep-form-mark'
+          ) {
+            return;
+          }
           revalidate(e);
         },
         true

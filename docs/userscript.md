@@ -11,7 +11,7 @@ Living description of `portal-farmare.user.js`: how it works, important decision
 
 ## Contents
 
-Current code baseline: **v1.4.8** (`portal-farmare.user.js`).
+Current code baseline: **v1.4.9** (`portal-farmare.user.js`).
 
 ### Purpose and scope
 
@@ -116,9 +116,9 @@ Also exported: `PF.flushHerdCache`.
 - **Pigs ≠ sheep URL contracts** — Pig grids use `idStaje` / `idStajovyRegistr`; sheep Zmeny needs `druhKey` — never mix sheep-style query params into pig grids.
 - **Czech dates / friendly labels** — Farmer-facing `d. m. YYYY`; strip internal event codes; CZ plural helpers.
 - **Pig date window 7 days** — Matches portal pig reporting rules; sheep dates allow past only (no future).
-- **Birth dialog: sex before ear mark** — Free marks are sex-partitioned; choosing Pohlaví first narrows “Přiřazené ušní číslo”. If the farmer picks a mark with no sex yet, sex is filled from that mark’s metadata and revalidated (so a blur error on empty sex clears).
+- **Birth dialog: sex before ear mark** — Free marks are sex-partitioned; choosing Pohlaví first narrows “Přiřazené ušní číslo”. If the farmer picks a mark with no sex yet, sex is filled from that mark’s metadata and revalidated. Blur from Pohlaví into the mark field skips sex validation (linked fields).
 - **Safe dialog close hooks** — Soften `.dialog('close')` on uninitialized placeholders without replacing the whole `$.fn.dialog` bridge (that broke ShowModalInner).
-- **Modal blur validation skips dismiss** — Live field checks run on `change` / in-dialog blur / submit. Backdrop click and Cancel move focus out of the dialog; those blurs must not paint red errors (flash before close). `relatedTarget` outside `.pf-modal` or Cancel → skip; field-to-field and Uložit still validate.
+- **Modal blur validation skips dismiss** — Live field checks run on `change` / in-dialog blur / submit. Backdrop click and Cancel move focus out of the dialog; those blurs must not paint red errors (flash before close). `relatedTarget` outside `.pf-modal` or Cancel → skip; field-to-field and Uložit still validate (except birth sex→mark).
 - **Don’t invent portal DOM** — Prefer `sources/` HAR/HTML or a live DOM sample from the user; never hardcode personal/stable-specific data.
 
 ### Data sources and DOM/API contracts
