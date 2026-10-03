@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Portál farmáře – zjednodušený (prasata + ovce)
 // @namespace    https://github.com/ceskyDJ/portal-farmare-simplified
-// @version      1.3.84
+// @version      1.3.85
 // @description  Jednoduchý dashboard a registry pro malého chovatele prasat a ovcí v Portálu farmáře / IZR
 // @author       Michal Šmahel (ceskyDJ)
 // @match        https://mze.gov.cz/ssl/app/izr2far/*
@@ -655,7 +655,6 @@
       'zmena',
       'událost',
       'udalost',
-      'matka',
       'poznámka',
       'poznamka',
       'stav',
@@ -5835,9 +5834,11 @@ body.pf-simple .ui-dialog .grid-table {
       ) {
         return 'Datum nahlášení';
       }
-      // Sheep register / pending: animal note column
+      // Sheep register / pending / history: animal note column
       if (
-        (kind === 'sheep' || kind === 'sheep-send') &&
+        (kind === 'sheep' ||
+          kind === 'sheep-send' ||
+          kind === 'sheep-history') &&
         (/poznamka\s*zvire|poznzvire/.test(t) || t === 'poznamka')
       ) {
         return 'Poznámka';
@@ -5933,6 +5934,11 @@ body.pf-simple .ui-dialog .grid-table {
         (kind === 'sheep-history' || kind === 'sheep-send') &&
         /zalozen/.test(blob)
       ) {
+        return false;
+      }
+
+      // Sheep history: no Matka (pending still keeps it)
+      if (kind === 'sheep-history' && /matka/.test(blob)) {
         return false;
       }
 
@@ -7512,6 +7518,104 @@ body.pf-simple .ui-dialog .grid-table {
       }
     },
 
+    /** Indiv grid URL (stav=A) — same source as register note / sex. */
+    buildSheepIndivGridUrl(sheepHref) {
+      try {
+        const u = new URL(
+          sheepHref ||
+            PF.scrape.cached('sheep') ||
+            location.href ||
+            '',
+          location.origin
+        );
+        const idProv =
+          u.searchParams.get('idProvozovnySR') ||
+          u.searchParams.get('provozovnaSRKey') ||
+          '00000000000000000000000000000000';
+        const idSR =
+          u.searchParams.get('idStajovyRegistr') ||
+          u.searchParams.get('stajovyRegistrKey') ||
+          '';
+        const idStaj =
+          u.searchParams.get('idStaj') ||
+          u.searchParams.get('stajKey') ||
+          '00000000000000000000000000000000';
+        if (!idSR) return '';
+        return (
+          '/ssl/app/izr2far/StajoveRegistry/StajovyRegistrIndivGrid/Indiv' +
+          '?provozovnaSRKey=' +
+          encodeURIComponent(idProv) +
+          '&stajovyRegistrKey=' +
+          encodeURIComponent(idSR) +
+          '&stajKey=' +
+          encodeURIComponent(idStaj) +
+          '&stavZvirat=A'
+        );
+      } catch (_) {
+        return '';
+      }
+    },
+
+    /**
+     * Ear → { sex, note } from Indiv (incl. red/removed) for history enrichment.
+     * History Pohyby has event POZNAMKA / no sex — register uses POZNZVIRE + ID2.
+     */
+    parseSheepIndivByEar(html) {
+      const byEar = new Map();
+      if (!html) return byEar;
+      try {
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        qsa('table.grid-table, table.dataTable, table', doc).forEach((table) => {
+          const changer =
+            table.getAttribute('data-changerowsel') ||
+            table.getAttribute('data-changeRowSel') ||
+            '';
+          if (changer && /ZMENY|Zmeny/i.test(changer)) return;
+          const cols =
+            PF.pending && PF.pending.sheepIndivColMap
+              ? PF.pending.sheepIndivColMap(table)
+              : {};
+          if (cols.ZNAMKA == null && cols.UZ == null) return;
+          qsa('tbody tr.grid-row, tbody tr', table).forEach((tr) => {
+            if (isFilterChromeRow(tr)) return;
+            const cells = qsa(':scope > td', tr);
+            const earIdx = cols.ZNAMKA != null ? cols.ZNAMKA : cols.UZ;
+            const earRaw = earIdx != null ? cellText(cells[earIdx]) : '';
+            const key =
+              PF.pending && PF.pending.earKey
+                ? PF.pending.earKey(earRaw)
+                : norm(String(earRaw || '').replace(/\s+/g, ''));
+            if (!key || key.length < 5) return;
+            const sexRaw =
+              cols.ID2 != null ? textOf(cells[cols.ID2]) : '';
+            const sex = PF.scrape.classifySex(sexRaw) || '';
+            const note =
+              cols.POZNZVIRE != null
+                ? friendlyDisplayText(cellText(cells[cols.POZNZVIRE]))
+                : '';
+            byEar.set(key, { sex, note });
+          });
+        });
+      } catch (_) {}
+      return byEar;
+    },
+
+    fetchSheepIndivByEar() {
+      const sheepHref =
+        PF.scrape.cached('sheep') ||
+        (PF.shell &&
+          PF.shell.swapController &&
+          PF.shell.swapController(location.href, 'StajovyRegistrIndiv', [
+            'stavDefault',
+          ])) ||
+        location.href;
+      const gridUrl = this.buildSheepIndivGridUrl(sheepHref);
+      if (!gridUrl) return Promise.resolve(new Map());
+      return this.getHtml(gridUrl).then((html) =>
+        this.parseSheepIndivByEar(html)
+      );
+    },
+
     findSheepHistoryGridUrls(html, histHref) {
       const found = [];
       const re =
@@ -7893,6 +7997,44 @@ body.pf-simple .ui-dialog .grid-table {
           if (notes.length) keepIdx.splice(0, keepIdx.length, ...rest, ...notes);
         }
 
+        // Sheep history: ear col for Indiv note/sex enrichment
+        const historyEnrich =
+          kind === 'sheep-history' ? this._sheepIndivByEar || null : null;
+        let historyEarCol = -1;
+        let historyNoteCol = -1;
+        if (kind === 'sheep-history') {
+          keepIdx.forEach((idx) => {
+            const blob = norm(
+              (labels[idx] || '') +
+                ' ' +
+                (ths[idx].getAttribute('data-colname') || '')
+            );
+            if (historyEarCol < 0 && /usni|(?:^|[^a-z])znamka/.test(blob)) {
+              historyEarCol = idx;
+            }
+            if (
+              historyNoteCol < 0 &&
+              (/^poznamka$/.test(norm(labels[idx] || '')) ||
+                norm(ths[idx].getAttribute('data-colname') || '') ===
+                  'poznamka') &&
+              !/prisun/.test(blob)
+            ) {
+              historyNoteCol = idx;
+            }
+          });
+          // Also find ear among all native cols if not kept somehow
+          if (historyEarCol < 0) {
+            ths.forEach((th, idx) => {
+              const blob = norm(
+                (labels[idx] || '') +
+                  ' ' +
+                  (th.getAttribute('data-colname') || '')
+              );
+              if (/usni|(?:^|[^a-z])znamka/.test(blob)) historyEarCol = idx;
+            });
+          }
+        }
+
         // Fallback: if filters matched nothing, keep every non-chrome column
         // so the register never goes blank after an AJAX refresh.
         if (!keepIdx.length) {
@@ -8062,6 +8204,27 @@ body.pf-simple .ui-dialog .grid-table {
               tr.appendChild(tdSel);
             }
 
+            // Sheep history: resolve ear → register note/sex (Indiv) once per row
+            let historyAnimal = null;
+            if (kind === 'sheep-history') {
+              const earRaw =
+                historyEarCol >= 0 && cells[historyEarCol]
+                  ? cellText(cells[historyEarCol])
+                  : '';
+              const earKey =
+                PF.pending && PF.pending.earKey
+                  ? PF.pending.earKey(earRaw)
+                  : norm(String(earRaw || '').replace(/\s+/g, ''));
+              if (earKey && historyEnrich) {
+                historyAnimal = historyEnrich.get(earKey) || null;
+              }
+              if (historyAnimal && historyAnimal.sex === 'male') {
+                tr.classList.add('pf-sex-male');
+              } else if (historyAnimal && historyAnimal.sex === 'female') {
+                tr.classList.add('pf-sex-female');
+              }
+            }
+
             keepIdx.forEach((i) => {
               const td = document.createElement('td');
               const src = cells[i];
@@ -8073,9 +8236,17 @@ body.pf-simple .ui-dialog .grid-table {
                 shown === 'Datum přidání' ||
                 shown === 'Datum narození' ||
                 /prich|pridan/.test(labelBlob);
-              td.textContent = asDateOnly
-                ? dateOnlyText(raw)
-                : friendlyDisplayText(raw);
+
+              // Sheep history: Poznámka = animal note from Registr (POZNZVIRE),
+              // never Pohyby event note ("Domácí porážka;", "Počáteční stav")
+              if (kind === 'sheep-history' && i === historyNoteCol) {
+                td.textContent =
+                  (historyAnimal && historyAnimal.note) || '';
+              } else {
+                td.textContent = asDateOnly
+                  ? dateOnlyText(raw)
+                  : friendlyDisplayText(raw);
+              }
 
               // Sheep register: make sex obvious without reading the cell text
               if (
@@ -8104,7 +8275,7 @@ body.pf-simple .ui-dialog .grid-table {
             });
             // If Pohlaví column was hidden, still try to classify from the native row
             if (
-              (kind === 'sheep' || kind === 'sheep-history') &&
+              kind === 'sheep' &&
               !tr.classList.contains('pf-sex-male') &&
               !tr.classList.contains('pf-sex-female')
             ) {
@@ -8226,131 +8397,147 @@ body.pf-simple .ui-dialog .grid-table {
     },
 
     refresh(kind) {
-      return PF._pfQuietMutate(() => {
-        // Sheep: need "vše" so pending outbound animals remain in the list
-        if (kind === 'sheep' && this.ensureSheepStavVse()) {
-          return Promise.resolve();
-        }
-
-        // Pig register: don't restart while the initial date fetch is in flight
-        if (kind === 'pig' && this._pigSummaryLoading) {
-          return this._pigSummaryPromise || Promise.resolve();
-        }
-
-        this.moveContentToHost();
-        this.hideFarmChrome(document);
-        this.buildToolbar(kind);
-        const pigSettled =
-          kind === 'pig' &&
-          qs('#pf-pig-summary') &&
-          qs('#pf-pig-summary').dataset.pfSettled === '1';
-        const sheepSettled =
-          kind === 'sheep' &&
-          qs('#pf-sheep-summary') &&
-          qs('#pf-sheep-summary').dataset.pfSettled === '1';
-        // Don't tear down a settled pig/sheep summary — that caused Načítám… flicker
-        if (pigSettled || sheepSettled) {
-          qsa('#pf-host .pf-simple-table-wrap').forEach((el) => el.remove());
-        } else {
-          qsa(
-            '#pf-host .pf-simple-table-wrap, #pf-pig-summary, #pf-sheep-summary'
-          ).forEach((el) => el.remove());
-        }
-        // Always restore native grids so a failed simplify cannot leave a blank host
-        qsa('#pf-host .pf-native-grid-hide').forEach((el) =>
-          el.classList.remove('pf-native-grid-hide')
-        );
-        qsa('#pf-host table[data-pf-simplified]').forEach((t) => {
-          t.dataset.pfSimplified = '0';
-        });
-        const ready = this.simplifyTables(kind);
-        this.hideNoiseActions(kind);
-
-        // Sheep Registr: if simplify produced nothing, keep native grid visible
-        // so the animal list never disappears after chrome/AJAX races.
-        if (kind === 'sheep') {
-          const host = qs('#pf-host');
-          if (host && !qs('.pf-simple-table-wrap', host)) {
-            qsa(
-              'table.grid-table, table.dataTable, .grid, .grid-full-width',
-              host
-            ).forEach((el) => {
-              el.classList.remove('pf-native-grid-hide');
-              if (el.dataset) el.dataset.pfSimplified = '0';
-            });
+      const run = () =>
+        PF._pfQuietMutate(() => {
+          // Sheep: need "vše" so pending outbound animals remain in the list
+          if (kind === 'sheep' && this.ensureSheepStavVse()) {
+            return Promise.resolve();
           }
-          this.updateSheepActionAvailability();
-        }
 
-        // Refresh cached sheep sex breakdown from register table
-        if (kind === 'sheep') {
-          const sex = PF.scrape.countSheepSexFromRoot(qs('#pf-host') || document);
-          if (sex) PF.scrape.saveSheepSexCounts(sex.male, sex.female);
-          this.renderSheepRegisterSummary();
-        }
+          // Pig register: don't restart while the initial date fetch is in flight
+          if (kind === 'pig' && this._pigSummaryLoading) {
+            return this._pigSummaryPromise || Promise.resolve();
+          }
 
-        // Cache latest pig change date + herd size while browsing Historie
-        if (kind === 'pig-history') {
-          const host = qs('#pf-host') || document;
-          const snap = this.extractLatestProcessedSnapshotFromRoot(host, {
-            processedOnly: true,
-          });
-          if (snap.date) this.savePigLastChange(snap.date, { force: true });
-          if (snap.count != null) {
-            try {
-              localStorage.setItem('pf-count-pigs', String(snap.count));
-            } catch (_) {}
+          this.moveContentToHost();
+          this.hideFarmChrome(document);
+          this.buildToolbar(kind);
+          const pigSettled =
+            kind === 'pig' &&
+            qs('#pf-pig-summary') &&
+            qs('#pf-pig-summary').dataset.pfSettled === '1';
+          const sheepSettled =
+            kind === 'sheep' &&
+            qs('#pf-sheep-summary') &&
+            qs('#pf-sheep-summary').dataset.pfSettled === '1';
+          // Don't tear down a settled pig/sheep summary — that caused Načítám… flicker
+          if (pigSettled || sheepSettled) {
+            qsa('#pf-host .pf-simple-table-wrap').forEach((el) => el.remove());
           } else {
+            qsa(
+              '#pf-host .pf-simple-table-wrap, #pf-pig-summary, #pf-sheep-summary'
+            ).forEach((el) => el.remove());
+          }
+          // Always restore native grids so a failed simplify cannot leave a blank host
+          qsa('#pf-host .pf-native-grid-hide').forEach((el) =>
+            el.classList.remove('pf-native-grid-hide')
+          );
+          qsa('#pf-host table[data-pf-simplified]').forEach((t) => {
+            t.dataset.pfSimplified = '0';
+          });
+          const ready = this.simplifyTables(kind);
+          this.hideNoiseActions(kind);
+
+          // Sheep Registr: if simplify produced nothing, keep native grid visible
+          // so the animal list never disappears after chrome/AJAX races.
+          if (kind === 'sheep') {
+            const host = qs('#pf-host');
+            if (host && !qs('.pf-simple-table-wrap', host)) {
+              qsa(
+                'table.grid-table, table.dataTable, .grid, .grid-full-width',
+                host
+              ).forEach((el) => {
+                el.classList.remove('pf-native-grid-hide');
+                if (el.dataset) el.dataset.pfSimplified = '0';
+              });
+            }
+            this.updateSheepActionAvailability();
+          }
+
+          // Refresh cached sheep sex breakdown from register table
+          if (kind === 'sheep') {
+            const sex = PF.scrape.countSheepSexFromRoot(
+              qs('#pf-host') || document
+            );
+            if (sex) PF.scrape.saveSheepSexCounts(sex.male, sex.female);
+            this.renderSheepRegisterSummary();
+          }
+
+          // Cache latest pig change date + herd size while browsing Historie
+          if (kind === 'pig-history') {
+            const host = qs('#pf-host') || document;
+            const snap = this.extractLatestProcessedSnapshotFromRoot(host, {
+              processedOnly: true,
+            });
+            if (snap.date) this.savePigLastChange(snap.date, { force: true });
+            if (snap.count != null) {
+              try {
+                localStorage.setItem('pf-count-pigs', String(snap.count));
+              } catch (_) {}
+            } else {
+              const latest = this.pickLatestDate(
+                this.extractChangeDatesFromRoot(host, { processedOnly: true })
+              );
+              if (latest) this.savePigLastChange(latest, { force: true });
+            }
+          }
+          if (kind === 'sheep-history') {
+            const host = qs('#pf-host') || document;
             const latest = this.pickLatestDate(
               this.extractChangeDatesFromRoot(host, { processedOnly: true })
             );
-            if (latest) this.savePigLastChange(latest, { force: true });
+            if (latest) this.saveSheepLastChange(latest, { force: true });
           }
-        }
-        if (kind === 'sheep-history') {
-          const host = qs('#pf-host') || document;
-          const latest = this.pickLatestDate(
-            this.extractChangeDatesFromRoot(host, { processedOnly: true })
-          );
-          if (latest) this.saveSheepLastChange(latest, { force: true });
-        }
 
-        // Pending table: wait until Zmeny+Indiv merge is ready (sheep & pigs)
-        let pendingReady = Promise.resolve();
-        if (kind === 'pig' || kind === 'sheep') {
-          // Hide stale pending until the fresh load paints once
-          if (kind === 'sheep') {
-            try {
-              PF.pending.showSection(false);
-              PF.pending.state.rows = [];
-            } catch (_) {}
-            if (sheepSettled) {
+          // Pending table: wait until Zmeny+Indiv merge is ready (sheep & pigs)
+          let pendingReady = Promise.resolve();
+          if (kind === 'pig' || kind === 'sheep') {
+            // Hide stale pending until the fresh load paints once
+            if (kind === 'sheep') {
               try {
-                PF.loader.holdBusy('Načítám…');
+                PF.pending.showSection(false);
+                PF.pending.state.rows = [];
               } catch (_) {}
+              if (sheepSettled) {
+                try {
+                  PF.loader.holdBusy('Načítám…');
+                } catch (_) {}
+              }
             }
+            pendingReady =
+              PF.pending.refresh(kind, {
+                force: kind === 'sheep' ? !!sheepSettled : false,
+              }) || Promise.resolve();
           }
-          pendingReady =
-            PF.pending.refresh(kind, {
-              force: kind === 'sheep' ? !!sheepSettled : false,
-            }) || Promise.resolve();
-        }
 
-        const base =
-          ready && typeof ready.then === 'function'
-            ? ready
-            : Promise.resolve();
-        return base
-          .then(() => pendingReady)
-          .catch(() => pendingReady)
-          .finally(() => {
-            if (kind === 'sheep' && sheepSettled) {
-              try {
-                PF.loader.releaseBusy();
-              } catch (_) {}
-            }
-          });
-      });
+          const base =
+            ready && typeof ready.then === 'function'
+              ? ready
+              : Promise.resolve();
+          return base
+            .then(() => pendingReady)
+            .catch(() => pendingReady)
+            .finally(() => {
+              if (kind === 'sheep' && sheepSettled) {
+                try {
+                  PF.loader.releaseBusy();
+                } catch (_) {}
+              }
+            });
+        });
+
+      // Sheep history: load Indiv note/sex before paint (Pohyby lacks both)
+      if (kind === 'sheep-history') {
+        return this.fetchSheepIndivByEar()
+          .then((map) => {
+            this._sheepIndivByEar = map || new Map();
+          })
+          .catch(() => {
+            this._sheepIndivByEar = new Map();
+          })
+          .then(() => run());
+      }
+      return run();
     },
   };
 
