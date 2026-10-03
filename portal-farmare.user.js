@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Portál farmáře – zjednodušený (prasata + ovce)
 // @namespace    https://github.com/ceskyDJ/portal-farmare-simplified
-// @version      1.4.2
+// @version      1.4.3
 // @description  Jednoduchý dashboard a registry pro malého chovatele prasat a ovcí v Portálu farmáře / IZR
 // @author       Michal Šmahel (ceskyDJ)
 // @match        https://mze.gov.cz/ssl/app/izr2far/*
@@ -3995,6 +3995,8 @@ body.pf-simple .ui-dialog .grid-table {
     _queue: [],
     _boxMo: null,
     _hookTimer: null,
+    _navigating: false,
+    _paintedSig: '',
 
     ensureRoot() {
       let root = this._root || qs('#pf-toast-root');
@@ -4027,8 +4029,9 @@ body.pf-simple .ui-dialog .grid-table {
       }
     },
 
-    /** Boot / busy overlays cover the screen — don't paint (or start timers) yet. */
+    /** Block paint during boot/busy or right before a full navigation. */
     isBlocked() {
+      if (this._navigating) return true;
       try {
         if (document.documentElement.classList.contains('pf-booting'))
           return true;
@@ -4044,6 +4047,11 @@ body.pf-simple .ui-dialog .grid-table {
       return false;
     },
 
+    /** Call immediately before location.href / replace navigations. */
+    beginNavigate() {
+      this._navigating = true;
+    },
+
     enqueue(message, type) {
       const text = this.plain(message);
       const t = type === 'error' || type === 'info' ? type : 'success';
@@ -4054,7 +4062,8 @@ body.pf-simple .ui-dialog .grid-table {
     },
 
     /**
-     * Survive full-page navigations (cancel/send). Restored on next boot via takeStash().
+     * Persist across reloads. Cleared only after the toast is dismissed
+     * (so a reload right after paint can still restore it once).
      */
     stash(message, type) {
       const text = this.plain(message);
@@ -4068,26 +4077,52 @@ body.pf-simple .ui-dialog .grid-table {
       } catch (_) {}
     },
 
-    takeStash() {
+    clearStash() {
+      try {
+        sessionStorage.removeItem('pf-toast-stash');
+      } catch (_) {}
+    },
+
+    peekStash() {
       let raw = null;
       try {
         raw = sessionStorage.getItem('pf-toast-stash');
-        if (raw) sessionStorage.removeItem('pf-toast-stash');
       } catch (_) {
-        return;
+        return null;
       }
-      if (!raw) return;
+      if (!raw) return null;
       try {
         const o = JSON.parse(raw);
-        if (!o || !o.text) return;
-        if (Date.now() - (Number(o.t) || 0) > 60000) return;
-        this.enqueue(o.text, o.type || 'success');
-      } catch (_) {}
+        if (!o || !o.text) return null;
+        if (Date.now() - (Number(o.t) || 0) > 60000) {
+          this.clearStash();
+          return null;
+        }
+        return {
+          text: String(o.text),
+          type: o.type === 'error' || o.type === 'info' ? o.type : 'success',
+        };
+      } catch (_) {
+        return null;
+      }
+    },
+
+    /**
+     * Action outcome that must survive reload: stash + queue, never paint now.
+     * flush() paints only when boot/busy are gone and we are not navigating.
+     */
+    announce(message, type) {
+      const text = this.plain(message);
+      const t = type === 'error' || type === 'info' ? type : 'success';
+      if (!text) return;
+      if (!earlyEnabled() && !isEnabled()) return;
+      this.stash(text, t);
+      this.enqueue(text, t);
     },
 
     /**
      * Drop portal #messages-box nodes without showing their copy.
-     * Farmer-facing text comes only from PF.toast.saved / stash / error helpers.
+     * Farmer-facing text comes only from PF.toast.saved / announce helpers.
      */
     consumePortalBoxes() {
       const nodes = qsa(
@@ -4216,11 +4251,10 @@ body.pf-simple .ui-dialog .grid-table {
       return 'Změna v registru prasat byla přidána' + pending + '.';
     },
 
-    /** Queue/show a contextual success toast for a completed register action. */
+    /** Persist a contextual success toast for a completed register action. */
     saved(kind, typ, data) {
       const msg = this.describeSaved(kind, typ, data);
-      if (msg) return this.success(msg);
-      return null;
+      if (msg) this.announce(msg, 'success');
     },
 
     watchPortalBoxes() {
@@ -4229,10 +4263,10 @@ body.pf-simple .ui-dialog .grid-table {
         const box = document.getElementById('messages-box');
         if (!box) return false;
         if (this._boxMo) return true;
+        // Only strip portal nodes — never flush here (that stole stashes before navigate)
         this._boxMo = new MutationObserver(() => {
           try {
             this.consumePortalBoxes();
-            if (!this.isBlocked()) this.flush();
           } catch (_) {}
         });
         this._boxMo.observe(box, { childList: true, subtree: true });
@@ -4246,23 +4280,27 @@ body.pf-simple .ui-dialog .grid-table {
       mo.observe(document.documentElement, { childList: true, subtree: true });
     },
 
-    /** Paint queued toasts once boot/busy overlays are gone. */
+    /** Paint queued/stashed toasts once boot/busy overlays are gone. */
     flush() {
       if (!earlyEnabled() && !isEnabled()) {
         this._queue.length = 0;
         return;
       }
       try {
-        this.takeStash();
-      } catch (_) {}
-      try {
         this.consumePortalBoxes();
       } catch (_) {}
       if (this.isBlocked()) return;
+
+      const stashed = this.peekStash();
+      if (stashed) this.enqueue(stashed.text, stashed.type);
+
       if (!this._queue.length) return;
       const items = this._queue.splice(0, this._queue.length);
       items.forEach((item, i) => {
-        // Stagger so multiple messages don't stack as one blink
+        const sig = item.type + '\0' + item.text;
+        // Same page: don't paint the same announce twice (busy hide + boot hide)
+        if (this._paintedSig === sig) return;
+        this._paintedSig = sig;
         setTimeout(() => {
           this._paint(item.text, item.type, {});
         }, i * 80);
@@ -4273,6 +4311,8 @@ body.pf-simple .ui-dialog .grid-table {
       const o = opts || {};
       if (!text) return null;
       if (!earlyEnabled() && !isEnabled()) return null;
+      // Keep stash until dismiss so a reload during the toast can restore it
+      this.stash(text, type);
 
       const root = this.ensureRoot();
       const el = document.createElement('div');
@@ -4303,6 +4343,11 @@ body.pf-simple .ui-dialog .grid-table {
         }
         el.classList.remove('is-in');
         el.classList.add('is-out');
+        // Clear only if stash still matches this toast
+        try {
+          const cur = this.peekStash();
+          if (cur && cur.text === text && cur.type === type) this.clearStash();
+        } catch (_) {}
         setTimeout(() => {
           try {
             el.remove();
@@ -4338,7 +4383,7 @@ body.pf-simple .ui-dialog .grid-table {
       const text = this.plain(message);
       if (!text) return null;
       if (!earlyEnabled() && !isEnabled()) return null;
-      // During boot/busy: queue — timers must not start while the overlay covers us
+      // Immediate errors/info (no navigation): queue while blocked, else paint
       if (this.isBlocked()) {
         this.enqueue(text, type);
         return null;
@@ -4362,9 +4407,6 @@ body.pf-simple .ui-dialog .grid-table {
      */
     installHooks() {
       if (!earlyEnabled()) return;
-      try {
-        this.takeStash();
-      } catch (_) {}
       this.watchPortalBoxes();
       const tryHook = () => {
         const $ = window.jQuery || window.$;
@@ -5410,6 +5452,10 @@ body.pf-simple .ui-dialog .grid-table {
         } catch (_) {}
         return;
       }
+      // Full navigation — don't paint toasts on this dying page
+      try {
+        PF.toast.beginNavigate();
+      } catch (_) {}
       location.href = href;
     },
 
@@ -5706,7 +5752,7 @@ body.pf-simple .ui-dialog .grid-table {
       } catch (_) {}
       if (this.state.odeslatHref) {
         const n = this.state.rows.length;
-        PF.toast.stash(
+        PF.toast.announce(
           'Odesílám ' + CZ.allChangesPhrase(n) + ' do ústřední evidence…',
           'info'
         );
@@ -5729,16 +5775,15 @@ body.pf-simple .ui-dialog .grid-table {
       const isSheep = String(this.state.kind || pageKind() || '').startsWith(
         'sheep'
       );
+      const doneMsg =
+        'Neodeslaná změna byla zrušena a neodejde do evidence.';
       try {
         // Sheep: cancel via Zmeny (register row ids ≠ change ids)
         if (isSheep && this.state.smazatHref && row.id) {
           try {
             await this.setRowState([row.id], true);
           } catch (_) {}
-          PF.toast.stash(
-            'Neodeslaná změna byla zrušena a neodejde do evidence.',
-            'success'
-          );
+          PF.toast.announce(doneMsg, 'success');
           this.go(this.state.smazatHref);
           return;
         }
@@ -5747,16 +5792,23 @@ body.pf-simple .ui-dialog .grid-table {
           await this.runNativeSmazat(ids && ids.length ? ids : null, {
             allowKOdeslaniFallback: false,
           });
-          PF.toast.success(
-            'Neodeslaná změna byla zrušena a neodejde do evidence.'
-          );
+          PF.toast.announce(doneMsg, 'success');
+          // Portal may reload; if not, show after pending refresh settles
+          setTimeout(() => {
+            try {
+              PF.toast.flush();
+            } catch (_) {}
+          }, 1400);
         } catch (ex) {
           // If this is the only pending row, select the sole "K odeslání" line
           if (this.state.rows.length === 1) {
             await this.runNativeSmazat(null);
-            PF.toast.success(
-              'Neodeslaná změna byla zrušena a neodejde do evidence.'
-            );
+            PF.toast.announce(doneMsg, 'success');
+            setTimeout(() => {
+              try {
+                PF.toast.flush();
+              } catch (_) {}
+            }, 1400);
           } else {
             throw ex;
           }
@@ -5786,24 +5838,26 @@ body.pf-simple .ui-dialog .grid-table {
       const isSheep = String(this.state.kind || pageKind() || '').startsWith(
         'sheep'
       );
+      const doneMsg =
+        'Všechny neodeslané změny byly zrušeny a neodejdou do evidence.';
       try {
         if (isSheep && this.state.smazatHref) {
           const ids = this.state.rows.map((r) => r.id).filter(Boolean);
           try {
             await this.setRowState(ids, true);
           } catch (_) {}
-          PF.toast.stash(
-            'Všechny neodeslané změny byly zrušeny a neodejdou do evidence.',
-            'success'
-          );
+          PF.toast.announce(doneMsg, 'success');
           this.go(this.state.smazatHref);
           return;
         }
         // All "K odeslání" rows (ids from Zmeny may not match register grid)
         await this.runNativeSmazat(null, { allowKOdeslaniFallback: true });
-        PF.toast.success(
-          'Všechny neodeslané změny byly zrušeny a neodejdou do evidence.'
-        );
+        PF.toast.announce(doneMsg, 'success');
+        setTimeout(() => {
+          try {
+            PF.toast.flush();
+          } catch (_) {}
+        }, 1400);
       } catch (ex) {
         this.setStatus('');
         PF.toast.error(
