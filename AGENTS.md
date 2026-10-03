@@ -20,10 +20,11 @@
 
 ### Questions for the user
 
-- Research first. Ask only when blocked on a decision, clarification, approval, credential, or other input that belongs to the user.
+- Research first. Ask only when blocked on a decision, clarification, approval, credential, permission/environment issue, or other input that belongs to the user.
 - `AskQuestion` is the **only** allowed way to ask. Never ask in prose, a Markdown question block, a list, commentary, or the final response.
 - Ask exactly one unresolved question per turn. Put the safest sensible recommendation first and explain it in one line.
 - After asking, run `.cursor/bin/banner help` as the final tool call and wait.
+- **Permission / filesystem blocks:** If a write, chmod, chown, or similar fails with permission denied (or edits are blocked by the environment), stop immediately. Do **not** invent workarounds (rename-replace dances, copying over files, shell hacks). Ask the user via `AskQuestion` to fix permissions or unlock the path, then wait.
 
 ## Plans
 
