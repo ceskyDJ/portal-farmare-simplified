@@ -144,7 +144,7 @@ Also exported: `PF.flushHerdCache`.
 - Herd counts on home: section **AKTIVNÍ PROVOZOVNY** only (left SR overview’s first numeric col is pending events, not headcount)
 - Register links: `tr.grid-row` with detail icons; pending from **Neodeslané** column; tabs `.tabs-navlist a`. Pig fallback: any `StajovyRegistrPrasat` href (incl. AKTIVNÍ PROVOZOVNY). Sheep: Indiv detail-icon, else build Indiv from old-IZR `Registr.aspx?ID=` on the ovce provozovna row (AKTIVNÍ PROVOZOVNY has no new-IZR sheep link)
 - Grids: `table.grid-table`, `table.dataTable`, `.grid`, `.tabs-content` under `#main`
-- Sheep row rules: stav column, `.cervene` = removed in ÚE; pending outbound stay until processed
+- Sheep row rules: herd uses **Stav přísun** (`data-colname=STAV`) = `zpracováno` and not `.cervene` (removed in ÚE); ignore **Stav odsun** (`STAVZMENY`) — empty on live animals; `.modre` = still in herd; pending outbound stay until ÚE marks red
 - Actions: `otevritDialogZmeny`, DialogPorizeni / DialogSRSkup / DialogPartneri; pending Odeslat / Smazat hlášení + portal Ano confirm
 - Column keep lists match Czech header fragments / `data-colname`
 

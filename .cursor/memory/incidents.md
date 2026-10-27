@@ -26,6 +26,12 @@ Living log of non-trivial problems and how they were resolved. Agents maintain t
 
 <!-- Distilled from development sessions that built portal-farmare.user.js (primarily 2026-09-30 → 2026-10-01). Append new records below this line, newest first. -->
 
+### 2026-10-27 — sheep-herd-empty-stav-odsun [1.5.2→1.5.3]
+**When:** Sheep Registr (`StajovyRegistrIndiv`) with simplified UI; same script version that worked minutes earlier; Firefox + Brave.
+**Core:** Indiv grid exposes both **Stav přísun** (`STAV`) and **Stav odsun** (`STAVZMENY`). `nativeStavColumnIndex` kept the last fuzzy `\bstav\b` match, so it read odsun. Live animals (`.modre`) have empty odsun → failed `/zpracovano/` herd filter.
+**Symptoms:** Simplified table only “Žádné záznamy”; mother/father ear selects empty (`listHerdAnimals` reads the simple table); history/pigs OK; no console errors; native grid still had rows.
+**Resolution:** Prefer exact `STAV` / “stav přísun”; explicitly skip `STAVZMENY` / odsun|zmeny blobs in `nativeStavColumnIndex` and `stateColumnIndex`.
+
 ### 2026-10-27 — loader-subtitle-flip [1.4.11→1.4.12]
 **When:** Initial load (and any boot+progress/hold overlap) with easy mode on.
 **Core:** Boot used `Načítání…` while progress/hold retitled the same splash to `Čekejte prosím…` / `Načítám…` / `Ukládám…`.

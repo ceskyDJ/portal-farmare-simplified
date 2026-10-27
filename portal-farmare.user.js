@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Portál farmáře – zjednodušený (prasata + ovce)
 // @namespace    https://github.com/ceskyDJ/portal-farmare-simplified
-// @version      1.5.2
+// @version      1.5.3
 // @description  Jednoduchý dashboard a registry pro malého chovatele prasat a ovcí v Portálu farmáře / IZR
 // @author       Michal Šmahel (ceskyDJ)
 // @match        https://mze.gov.cz/ssl/app/izr2far/*
@@ -5732,7 +5732,12 @@ body.pf-simple .ui-dialog .grid-table {
       );
     },
 
-    /** Stav column index inside a native grid table. */
+    /**
+     * Stav column index inside a native grid table.
+     * Prefer exact data-colname STAV (Stav přísun). Never use STAVZMENY /
+     * "Stav odsun" — that column is empty for animals still in the herd, which
+     * would make isSheepHerdRow reject every live row.
+     */
     nativeStavColumnIndex(table) {
       if (!table) return -1;
       const headRow =
@@ -5742,7 +5747,8 @@ body.pf-simple .ui-dialog .grid-table {
       const ths = qsa(':scope > th, :scope > td', headRow).length
         ? qsa(':scope > th, :scope > td', headRow)
         : qsa('th', headRow);
-      let idx = -1;
+      let exact = -1;
+      let fuzzy = -1;
       ths.forEach((th, i) => {
         const col = String(
           th.getAttribute('data-colname') || th.getAttribute('data-field') || ''
@@ -5750,16 +5756,21 @@ body.pf-simple .ui-dialog .grid-table {
         const label = norm(PF.registers.headerLabel(th));
         const blob = norm(label + ' ' + col);
         if (/konecn|pocatec|zvirat|zive|celkem|pocet/.test(blob)) return;
+        // Outbound-change status is not the přísun / herd column
+        if (col === 'STAVZMENY' || /\bodsun\b|\bzmeny\b/.test(blob)) return;
+        if (col === 'STAV' || /^stav(\s+prisun)?$/.test(label)) {
+          exact = i;
+          return;
+        }
         if (
-          col === 'STAV' ||
           label === 'stav' ||
           /^stav$/.test(label) ||
           (/\bstav\b/.test(blob) && blob.length <= 24)
         ) {
-          idx = i;
+          fuzzy = i;
         }
       });
-      return idx;
+      return exact >= 0 ? exact : fuzzy;
     },
 
     rowCheckbox(tr) {
@@ -7527,7 +7538,8 @@ body.pf-simple .ui-dialog .grid-table {
     },
 
     /** Index of processing "Stav" column (zpracováno / …); -1 if not found.
-     *  Ignores "Konečný stav" / "Počáteční stav" / herd-status columns. */
+     *  Ignores "Konečný stav" / "Počáteční stav" / herd-status columns.
+     *  Prefers exact STAV / STAVID; skips sheep "Stav odsun" (STAVZMENY). */
     stateColumnIndex(table) {
       if (!table) return -1;
       const headRow =
@@ -7537,7 +7549,8 @@ body.pf-simple .ui-dialog .grid-table {
       const ths = qsa(':scope > th, :scope > td', headRow).length
         ? qsa(':scope > th, :scope > td', headRow)
         : qsa('th', headRow);
-      let idx = -1;
+      let exact = -1;
+      let fuzzy = -1;
       ths.forEach((th, i) => {
         const col = String(
           th.getAttribute('data-colname') ||
@@ -7549,18 +7562,26 @@ body.pf-simple .ui-dialog .grid-table {
         // Not inventory / result-count "stav"
         if (/konecn|pocatec|zvirat|zive|celkem|pocet|ks\b|prasnic/.test(blob))
           return;
+        // Sheep Indiv: Stav odsun is not the processing column
+        if (col === 'STAVZMENY' || /\bodsun\b|\bzmeny\b/.test(blob)) return;
         // Portal pig history: data-colname="STAVID"
         if (
           col === 'STAV' ||
           col === 'STAVID' ||
+          /^stav(\s+prisun)?$/.test(label)
+        ) {
+          exact = i;
+          return;
+        }
+        if (
           label === 'stav' ||
           /^stav$/.test(label) ||
           (/\bstav\b/.test(blob) && blob.length <= 24)
         ) {
-          idx = i;
+          fuzzy = i;
         }
       });
-      return idx;
+      return exact >= 0 ? exact : fuzzy;
     },
 
     /** True when a history row is processed in ÚE (stav = zpracováno). */
