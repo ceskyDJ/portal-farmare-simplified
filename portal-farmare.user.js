@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Portál farmáře – zjednodušený (prasata + ovce)
 // @namespace    https://github.com/ceskyDJ/portal-farmare-simplified
-// @version      1.4.12
+// @version      1.4.13
 // @description  Jednoduchý dashboard a registry pro malého chovatele prasat a ovcí v Portálu farmáře / IZR
 // @author       Michal Šmahel (ceskyDJ)
 // @match        https://mze.gov.cz/ssl/app/izr2far/*
@@ -8940,7 +8940,7 @@ body.pf-simple .ui-dialog .grid-table {
           const hint = document.createElement('p');
           hint.className = 'pf-select-hint';
           hint.textContent =
-            'Zaškrtněte ovce v tabulce — akce (porážka, odsun, zcizení) je vezme všechny, každou na vlastní řádek.';
+            'Pokud chcete pracovat s více ovcemi najednou, zaškrtněte je v tabulce.';
           wrap.appendChild(hint);
         }
 

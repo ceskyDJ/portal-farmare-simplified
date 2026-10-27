@@ -11,7 +11,7 @@ Living description of `portal-farmare.user.js`: how it works, important decision
 
 ## Contents
 
-Current code baseline: **v1.4.12** (`portal-farmare.user.js`).
+Current code baseline: **v1.4.13** (`portal-farmare.user.js`).
 
 ### Purpose and scope
 
