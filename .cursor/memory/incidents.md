@@ -26,6 +26,12 @@ Living log of non-trivial problems and how they were resolved. Agents maintain t
 
 <!-- Distilled from development sessions that built portal-farmare.user.js (primarily 2026-09-30 → 2026-10-01). Append new records below this line, newest first. -->
 
+### 2026-10-27 — firefox-home-sheep-link-missing [1.4.9→1.4.10]
+**When:** Home (`MujSubjekt`) in Firefox Tampermonkey; pigs nav OK, Ovce href stayed `#`, male/female sheep showed `—` (Brave OK).
+**Core:** Sheep new-IZR `StajovyRegistrIndiv` lives only in the SR overview grid (AJAX); AKTIVNÍ PROVOZOVNY has new-IZR pig link but only old `Registr.aspx` for sheep. Home re-render keyed only on pig/sex counts, so a late sheep href never triggered refresh or `fetchSheepSexCounts` (worse on Firefox’s earlier document-start).
+**Symptoms:** Menu Ovce = `#`; sheep sex breakdown dashes; pigs still worked via provozovna fallback / cache.
+**Resolution:** Build Indiv URL from ovce `Registr.aspx?ID=`; include register hrefs in `homeStateKey` / `scheduleHome`; home MutationObserver schedules while either link is still missing.
+
 ### 2026-10-03 — pending-hash-scroll-fights-user [1.4.4→1.4.5]
 **When:** Registr with `#pf-pending` after boot/busy loader hide (pending count > 0, send redirect, or Registr tab link).
 **Core:** `apply()` always started a smooth `scrollIntoView` to the pending section right as the farmer overlay disappeared; no cancel on user input.

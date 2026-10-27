@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Portál farmáře – zjednodušený (prasata + ovce)
 // @namespace    https://github.com/ceskyDJ/portal-farmare-simplified
-// @version      1.4.9
+// @version      1.4.10
 // @description  Jednoduchý dashboard a registry pro malého chovatele prasat a ovcí v Portálu farmáře / IZR
 // @author       Michal Šmahel (ceskyDJ)
 // @match        https://mze.gov.cz/ssl/app/izr2far/*
@@ -3388,6 +3388,30 @@ body.pf-simple .ui-dialog .grid-table {
           'a.detail-icon[href*="StajovyRegistrIndiv"], a[href*="StajovyRegistrIndiv"]'
         );
         if (a) sheep = a.href;
+      }
+      // AKTIVNÍ PROVOZOVNY has a new-IZR pig link, but sheep only old IZR
+      // Registr.aspx?ID=… — build Indiv URL so Ovce works before the
+      // overview grid AJAX lands (common on Firefox document-start timing).
+      if (!sheep) {
+        qsa('a[href*="StajovyRegistr/Registr.aspx"]').some((a) => {
+          const tr = a.closest('tr');
+          if (!tr || !/ovce/.test(norm(textOf(tr)))) return false;
+          try {
+            const id = new URL(a.href, location.origin).searchParams.get('ID');
+            if (!id) return false;
+            sheep =
+              PF.config.base +
+              '/StajoveRegistry/StajovyRegistrIndiv' +
+              '?idProvozovnySR=00000000000000000000000000000000' +
+              '&idStajovyRegistr=' +
+              encodeURIComponent(id) +
+              '&idStaj=00000000000000000000000000000000' +
+              '&stavDefault=True';
+            return true;
+          } catch (_) {
+            return false;
+          }
+        });
       }
 
       return { sheep, pigs, sheepPending, pigsPending };
@@ -14402,28 +14426,33 @@ body.pf-simple .ui-dialog .grid-table {
     };
 
     run();
-      try {
-        const c0 = PF.scrape.herdCounts();
-        lastHomeCounts =
-          String(c0.pigs) +
-          '|' +
-          String(c0.sheepMale) +
-          '|' +
-          String(c0.sheepFemale);
-      } catch (_) {}
+
+    // Home re-render key: herd totals + sex breakdown + register hrefs.
+    // Links must be included — sheep Indiv URL often arrives only after the
+    // overview grid AJAX (Firefox paints earlier than Chromium); without
+    // them Ovce stays "#" and male/female fetch never runs.
+    const homeStateKey = () => {
+      const c = PF.scrape.herdCounts();
+      const l = PF.scrape.registerLinks();
+      return [
+        c.pigs,
+        c.sheep,
+        c.sheepMale,
+        c.sheepFemale,
+        l.sheep || PF.scrape.cached('sheep') || '',
+        l.pigs || PF.scrape.cached('pigs') || '',
+      ].join('|');
+    };
+
+    try {
+      lastHomeCounts = homeStateKey();
+    } catch (_) {}
 
     const scheduleHome = () => {
       if (kind !== 'home') return;
       clearTimeout(homeTimer);
       homeTimer = setTimeout(() => {
-        // Avoid pointless full re-renders; only refresh when herd counts change
-        const next = PF.scrape.herdCounts();
-        const key =
-          String(next.pigs) +
-          '|' +
-          String(next.sheepMale) +
-          '|' +
-          String(next.sheepFemale);
+        const key = homeStateKey();
         if (key === lastHomeCounts && qs('#pf-app .pf-herd')) return;
         lastHomeCounts = key;
         run();
@@ -14491,7 +14520,17 @@ body.pf-simple .ui-dialog .grid-table {
     }
 
     const mo = new MutationObserver(() => {
-      if (kind === 'home') return;
+      if (kind === 'home') {
+        // Overview / provozovny grids may land after first paint — pick up
+        // missing Ovce/Prasata hrefs (sex counts depend on the sheep link).
+        if (PF._pfMutating) return;
+        const sheepOk =
+          !!PF.scrape.cached('sheep') || !!PF.scrape.registerLinks().sheep;
+        const pigsOk =
+          !!PF.scrape.cached('pigs') || !!PF.scrape.registerLinks().pigs;
+        if (!sheepOk || !pigsOk) scheduleHome();
+        return;
+      }
       if (PF._pfMutating) return;
       const host = qs('#pf-host');
       if (!host) return;

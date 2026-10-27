@@ -11,7 +11,7 @@ Living description of `portal-farmare.user.js`: how it works, important decision
 
 ## Contents
 
-Current code baseline: **v1.4.9** (`portal-farmare.user.js`).
+Current code baseline: **v1.4.10** (`portal-farmare.user.js`).
 
 ### Purpose and scope
 
@@ -97,6 +97,8 @@ Also exported: `PF.flushHerdCache`.
 - **`@grant none` + `@sandbox raw`** — Stay in page JS context (Tampermonkey MAIN_WORLD) to call portal jQuery / `otevritDialogZmeny` / dialogs without GM sandbox bridges / `cloneInto`.
 - **Hide native UI, rebuild shell** — CSS keeps original nodes off-layout but reachable; scrapers and form fillers still need live portal DOM.
 - **Live jQuery lookup (`jq`/`refresh$`)** — Never trust a document-start `$` capture; call `refresh$()` before every `$` use. Portal loads jQuery after document-start (early binding caused `$.aq` / progressDialog / `ajaxComplete` failures — worse on Firefox’s true `document-start`).
+- **Home refresh key includes register links** — `scheduleHome` re-renders when sheep/pig hrefs appear (not only herd counts). Sheep Indiv URL often arrives via overview-grid AJAX after first paint; without link tracking, Ovce stayed `#` and male/female fetch never ran (esp. Firefox). Home MutationObserver also schedules when either link is still missing.
+- **Sheep link from old-IZR ID** — AKTIVNÍ PROVOZOVNY exposes new-IZR pig `StajovyRegistrPrasat` but only old `Registr.aspx?ID=` for sheep; build Indiv URL from that ID so Ovce works before the overview grid lands.
 - **`PF._pfQuietMutate` / `PF._pfMutating`** — PF DOM writes must not re-enter the body MutationObserver (refresh storms / resource exhaustion).
 - **Full custom overlay + off-screen native submit** — Farmer sees PF dialogs; portal DialogSRSkup / DialogPorizeni filled and saved hidden so the official post path stays authoritative.
 - **Pig history via `pfView=history`** — `StajovyRegistrPrasatPohyby` / `…Hlaseni` are dead/missing; history is the Prasata register grid itself.
@@ -136,7 +138,7 @@ Also exported: `PF.flushHerdCache`.
 
 - Subject: detail headers, `td.member-editor-caption`, validation span ids, Kontakty group
 - Herd counts on home: section **AKTIVNÍ PROVOZOVNY** only (left SR overview’s first numeric col is pending events, not headcount)
-- Register links: `tr.grid-row` with detail icons; pending from **Neodeslané** column; tabs `.tabs-navlist a`
+- Register links: `tr.grid-row` with detail icons; pending from **Neodeslané** column; tabs `.tabs-navlist a`. Pig fallback: any `StajovyRegistrPrasat` href (incl. AKTIVNÍ PROVOZOVNY). Sheep: Indiv detail-icon, else build Indiv from old-IZR `Registr.aspx?ID=` on the ovce provozovna row (AKTIVNÍ PROVOZOVNY has no new-IZR sheep link)
 - Grids: `table.grid-table`, `table.dataTable`, `.grid`, `.tabs-content` under `#main`
 - Sheep row rules: stav column, `.cervene` = removed in ÚE; pending outbound stay until processed
 - Actions: `otevritDialogZmeny`, DialogPorizeni / DialogSRSkup / DialogPartneri; pending Odeslat / Smazat hlášení + portal Ano confirm
