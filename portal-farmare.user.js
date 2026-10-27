@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Portál farmáře – zjednodušený (prasata + ovce)
 // @namespace    https://github.com/ceskyDJ/portal-farmare-simplified
-// @version      1.4.11
+// @version      1.4.12
 // @description  Jednoduchý dashboard a registry pro malého chovatele prasat a ovcí v Portálu farmáře / IZR
 // @author       Michal Šmahel (ceskyDJ)
 // @match        https://mze.gov.cz/ssl/app/izr2far/*
@@ -113,8 +113,12 @@
   PF.loader = {
     // Head silhouette + straw hat — same 64×64 filled style as pig/sheep icons
     farmerSvg: `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true"><path d="M18 22c1.2-11 6.5-17 14-17s12.8 6 14 17c-2.8-1.4-7.8-2.2-14-2.2S20.8 20.6 18 22z"/><ellipse cx="32" cy="24" rx="23" ry="5.5"/><ellipse cx="32" cy="40" rx="16.5" ry="17"/><circle cx="25.5" cy="38" r="2.5" fill="#f7f4ec"/><circle cx="38.5" cy="38" r="2.5" fill="#f7f4ec"/><path fill="#f7f4ec" d="M26.5 46.5c2.2 2.8 8.8 2.8 11 0-.4 3.2-3.5 5.2-5.5 5.2s-5.1-2-5.5-5.2z"/><path d="M14 52.5c3.2-3.5 9-5.5 18-5.5s14.8 2 18 5.5c-3.5 1.8-10 2.8-18 2.8s-14.5-1-18-2.8z" opacity=".35"/></svg>`,
+    // Whole-page overlay copy — keep stable; never flip mid-splash
+    MSG_LOAD: 'Načítám…',
+    MSG_SAVE: 'Ukládám…',
     _busyDepth: 0,
     _held: false,
+    _heldSubtitle: null,
     _hideTimer: null,
     _hookTimer: null,
     _busyMo: null,
@@ -136,13 +140,6 @@
       link.rel = 'stylesheet';
       link.href = this._fontHref;
       (document.head || document.documentElement).appendChild(link);
-    },
-
-    _updateBootSubtitle(subtitle) {
-      if (!subtitle) return;
-      const el = document.getElementById('pf-boot-loader');
-      const sub = el && el.querySelector('.pf-boot-sub');
-      if (sub) sub.textContent = subtitle;
     },
 
     _overlayCss(extra) {
@@ -352,7 +349,7 @@
       document.documentElement.classList.add('pf-booting');
 
       const mount = () =>
-        this._mountOverlay('pf-boot-loader', 'Načítání…');
+        this._mountOverlay('pf-boot-loader', this.MSG_LOAD);
 
       if (!mount()) {
         const mo = new MutationObserver(() => {
@@ -394,7 +391,7 @@
 
     _fillBusyContent(el, subtitle) {
       if (!el) return;
-      const sub = subtitle || 'Ukládám…';
+      const sub = subtitle || this.MSG_SAVE;
       if (!el.querySelector('.pf-boot-icon')) {
         el.innerHTML =
           '<div class="pf-boot-icon">' +
@@ -432,40 +429,34 @@
         el.setAttribute('aria-live', 'polite');
         document.body.appendChild(el);
       }
-      this._fillBusyContent(el, subtitle || 'Ukládám…');
+      this._fillBusyContent(el, subtitle || this.MSG_SAVE);
       el.classList.remove('pf-busy-out');
       el.classList.add('pf-busy-on');
     },
 
-    showBusy(subtitle) {
+    showBusy() {
       if (!earlyEnabled()) return;
       // While a form-save holds the overlay, portal progress open/close is a no-op
       if (this._held) return;
-      // Boot splash already covers the page — don't stack a second farmer overlay
-      // when portal $.progressDialog fires during initial AJAX.
-      if (this._isBooting()) {
-        this._updateBootSubtitle(subtitle || 'Čekejte prosím…');
-        return;
-      }
+      // Boot splash already covers the page — don't stack a second overlay or
+      // retitle mid-load (portal progress used to flip Načítání/Čekejte/Načítám).
+      if (this._isBooting()) return;
       this._busyDepth = Math.max(0, this._busyDepth) + 1;
-      this._ensureBusyVisible(subtitle || 'Čekejte prosím…');
+      this._ensureBusyVisible(this.MSG_LOAD);
     },
 
     holdBusy(subtitle) {
-      // Same as showBusy: keep a single splash while booting
-      if (this._isBooting()) {
-        this._held = true;
-        this._busyDepth = Math.max(1, this._busyDepth);
-        this._updateBootSubtitle(subtitle || 'Ukládám…');
-        return;
-      }
+      const msg = subtitle || this.MSG_SAVE;
       this._held = true;
+      this._heldSubtitle = msg;
       this._busyDepth = Math.max(1, this._busyDepth);
+      // Keep boot subtitle stable — same farmer splash, same "Načítám…"
+      if (this._isBooting()) return;
       try {
         document.body.classList.add('pf-save-busy');
       } catch (_) {}
       this._cancelBusyHide();
-      this._ensureBusyVisible(subtitle || 'Ukládám…');
+      this._ensureBusyVisible(msg);
       this._watchBusyDom();
     },
 
@@ -480,6 +471,7 @@
 
     releaseBusy() {
       this._held = false;
+      this._heldSubtitle = null;
       this._busyDepth = 0;
       this._unwatchBusyDom();
       try {
@@ -495,7 +487,7 @@
         if (!this._held) return;
         const el = document.getElementById('pf-busy-loader');
         if (!el || !el.querySelector('.pf-boot-icon')) {
-          this._ensureBusyVisible('Ukládám…');
+          this._ensureBusyVisible(this._heldSubtitle || this.MSG_SAVE);
         } else {
           el.classList.add('pf-busy-on');
           el.classList.remove('pf-busy-out');
@@ -581,7 +573,7 @@
 
         $.progressDialog = function (progressMessage) {
           if (!earlyEnabled()) return origOpen.apply(this, arguments);
-          PF.loader.showBusy('Čekejte prosím…');
+          PF.loader.showBusy();
           // Keep native dialog closed — CSS also hides it if something opens it
           try {
             const $dlg = $('.progress-dialog');
@@ -9341,7 +9333,7 @@ body.pf-simple .ui-dialog .grid-table {
               } catch (_) {}
               if (sheepSettled) {
                 try {
-                  PF.loader.holdBusy('Načítám…');
+                  PF.loader.holdBusy(PF.loader.MSG_LOAD);
                 } catch (_) {}
               }
             }
@@ -10128,7 +10120,7 @@ body.pf-simple .ui-dialog .grid-table {
           status.textContent = '';
         }
         // Single continuous farmer overlay until save finishes
-        PF.loader.holdBusy('Ukládám…');
+        PF.loader.holdBusy(PF.loader.MSG_SAVE);
         Promise.resolve()
           .then(() => onSubmit(wrap, err))
           .then(() => {
@@ -12721,7 +12713,7 @@ body.pf-simple .ui-dialog .grid-table {
           status.textContent = '';
         }
         // Single continuous farmer overlay until save finishes
-        PF.loader.holdBusy('Ukládám…');
+        PF.loader.holdBusy(PF.loader.MSG_SAVE);
         Promise.resolve()
           .then(() => onSubmit(wrap, err))
           .then(() => {

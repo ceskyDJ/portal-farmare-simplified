@@ -26,6 +26,12 @@ Living log of non-trivial problems and how they were resolved. Agents maintain t
 
 <!-- Distilled from development sessions that built portal-farmare.user.js (primarily 2026-09-30 → 2026-10-01). Append new records below this line, newest first. -->
 
+### 2026-10-27 — loader-subtitle-flip [1.4.11→1.4.12]
+**When:** Initial load (and any boot+progress/hold overlap) with easy mode on.
+**Core:** Boot used `Načítání…` while progress/hold retitled the same splash to `Čekejte prosím…` / `Načítám…` / `Ukládám…`.
+**Symptoms:** Subtitle text switched during one continuous farmer loading screen; felt inconsistent and unfriendly.
+**Resolution:** Central `MSG_LOAD` / `MSG_SAVE`; boot mounts only `MSG_LOAD` and never retitles; `showBusy` always `MSG_LOAD`; call sites use the constants; held remounts keep `_heldSubtitle`.
+
 ### 2026-10-27 — boot-busy-stack-and-font-fout [1.4.10→1.4.11]
 **When:** Initial page load with easy mode on (any IZR page); farmer boot splash visible.
 **Core:** Boot CSS named IBM Plex Serif before fonts were requested (only `@import` in later `PF.style`); portal `$.progressDialog` during boot AJAX mounted a second `#pf-busy-loader` on top of `#pf-boot-loader`.
