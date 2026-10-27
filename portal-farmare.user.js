@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Portál farmáře – zjednodušený (prasata + ovce)
 // @namespace    https://github.com/ceskyDJ/portal-farmare-simplified
-// @version      1.4.14
+// @version      1.4.15
 // @description  Jednoduchý dashboard a registry pro malého chovatele prasat a ovcí v Portálu farmáře / IZR
 // @author       Michal Šmahel (ceskyDJ)
 // @match        https://mze.gov.cz/ssl/app/izr2far/*
@@ -938,6 +938,28 @@
     return /zalozen|nahlas|nahlás|odeslan|datumcas|caszalozen|casodeslan/.test(
       blob
     );
+  }
+
+  /** Stable key for sheep Historie submission batches (full datetime). */
+  function submissionBatchKey(raw) {
+    return String(raw || '')
+      .replace(/\u00a0/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  }
+
+  /** Farmer-facing group label: date, plus time when the portal has it. */
+  function submissionBatchLabel(raw) {
+    const t = String(raw || '')
+      .replace(/\u00a0/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!t) return 'Bez data nahlášení';
+    const date = dateOnlyText(t);
+    const tm = t.match(/(\d{1,2})[:.](\d{2})(?:[:.](\d{2}))?/);
+    if (tm) return date + ', ' + tm[1] + ':' + tm[2];
+    return date;
   }
 
   function isFilterChromeRow(tr) {
@@ -1960,6 +1982,22 @@ body.pf-simple a[title*="7 dnů v ÚE" i] {
 
 .pf-simple-table tbody tr:last-child td {
   border-bottom: none;
+}
+
+.pf-simple-table tbody tr.pf-history-group td {
+  background: var(--pf-bg-2);
+  color: var(--pf-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--pf-line);
+}
+
+.pf-simple-table tbody tr.pf-history-group:hover td {
+  background: var(--pf-bg-2);
 }
 
 .pf-simple-table tbody tr:hover td {
@@ -8902,6 +8940,32 @@ body.pf-simple .ui-dialog .grid-table {
           });
         }
 
+        // Sheep Historie: group by submission datetime; date lives in group headers
+        let sheepSubmitCol = -1;
+        if (kind === 'sheep-history') {
+          ths.forEach((th, idx) => {
+            if (sheepSubmitCol >= 0) return;
+            const shown = this.displayHeaderLabel(kind, labels[idx] || '');
+            const blob = norm(
+              (labels[idx] || '') +
+                ' ' +
+                (th.getAttribute('data-colname') ||
+                  th.getAttribute('data-field') ||
+                  '')
+            );
+            if (
+              shown === 'Datum nahlášení' ||
+              /datumcasodeslan|casodeslan|odeslan/.test(blob)
+            ) {
+              sheepSubmitCol = idx;
+            }
+          });
+          if (sheepSubmitCol >= 0) {
+            const filtered = keepIdx.filter((i) => i !== sheepSubmitCol);
+            if (filtered.length) keepIdx.splice(0, keepIdx.length, ...filtered);
+          }
+        }
+
         if (!keepIdx.length) return;
 
         const rawRows = qsa('tbody tr.grid-row', table);
@@ -8972,6 +9036,7 @@ body.pf-simple .ui-dialog .grid-table {
 
         const tbody = document.createElement('tbody');
         const rowChecks = [];
+        let lastSheepBatchKey = null;
         if (!herdRows.length) {
           const tr = document.createElement('tr');
           const td = document.createElement('td');
@@ -9121,6 +9186,24 @@ body.pf-simple .ui-dialog .grid-table {
             if (dataCells.every((c) => !c.textContent.trim())) return;
             // Skip residual filter-operator chrome rows
             if (isFilterChromeRow(tr)) return;
+
+            // Sheep Historie: thin header when submission batch changes
+            if (kind === 'sheep-history' && sheepSubmitCol >= 0) {
+              const rawSubmit = cells[sheepSubmitCol]
+                ? cellText(cells[sheepSubmitCol])
+                : '';
+              const batchKey = submissionBatchKey(rawSubmit);
+              if (batchKey !== lastSheepBatchKey) {
+                lastSheepBatchKey = batchKey;
+                const gtr = document.createElement('tr');
+                gtr.className = 'pf-history-group';
+                const gtd = document.createElement('td');
+                gtd.colSpan = keepIdx.length + (selectable ? 1 : 0);
+                gtd.textContent = submissionBatchLabel(rawSubmit);
+                gtr.appendChild(gtd);
+                tbody.appendChild(gtr);
+              }
+            }
             tbody.appendChild(tr);
           });
         }
