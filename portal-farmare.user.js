@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Portál farmáře – zjednodušený (prasata + ovce)
 // @namespace    https://github.com/ceskyDJ/portal-farmare-simplified
-// @version      1.4.13
+// @version      1.4.14
 // @description  Jednoduchý dashboard a registry pro malého chovatele prasat a ovcí v Portálu farmáře / IZR
 // @author       Michal Šmahel (ceskyDJ)
 // @match        https://mze.gov.cz/ssl/app/izr2far/*
@@ -3964,9 +3964,9 @@ body.pf-simple .ui-dialog .grid-table {
     males: (n) => czechWord(n, 'samec', 'samci', 'samců'),
     females: (n) => czechWord(n, 'samice', 'samice', 'samic'),
     malesInStable: (n) =>
-      czechWord(n, 'Samec ve stáji', 'Samci ve stáji', 'Samců ve stáji'),
+      czechWord(n, 'samec ve stáji', 'samci ve stáji', 'samců ve stáji'),
     femalesInStable: (n) =>
-      czechWord(n, 'Samice ve stáji', 'Samice ve stáji', 'Samic ve stáji'),
+      czechWord(n, 'samice ve stáji', 'samice ve stáji', 'samic ve stáji'),
     changes: (n) =>
       czechWord(n, 'neodeslanou změnu', 'neodeslané změny', 'neodeslaných změn'),
     allChangesPhrase: (n) => {
@@ -8118,7 +8118,7 @@ body.pf-simple .ui-dialog .grid-table {
             <div class="pf-num pf-stat-date" id="pf-pig-last-change">${
               lastDate ? escapeHtml(formatCzDate(lastDate)) : '—'
             }</div>
-            <div class="pf-label">Poslední změna</div>
+            <div class="pf-label">poslední změna</div>
           </div>
         </div>`;
         box.dataset.pfSettled = '1';
@@ -8543,7 +8543,7 @@ body.pf-simple .ui-dialog .grid-table {
             <div class="pf-num pf-stat-date" id="pf-sheep-last-change">${
               lastDate ? escapeHtml(formatCzDate(lastDate)) : '—'
             }</div>
-            <div class="pf-label">Poslední změna</div>
+            <div class="pf-label">poslední změna</div>
           </div>
         </div>`;
         box.dataset.pfSettled = '1';
