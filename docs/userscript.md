@@ -11,7 +11,7 @@ Living description of `portal-farmare.user.js`: how it works, important decision
 
 ## Contents
 
-Current code baseline: **v1.4.16** (`portal-farmare.user.js`).
+Current code baseline: **v1.5.0** (`portal-farmare.user.js`).
 
 ### Purpose and scope
 
@@ -22,8 +22,9 @@ Tampermonkey userscript **Portál farmáře – zjednodušený (prasata + ovce)*
 - Early boot overlay, then a rebuilt shell (`#pf-app`) with Domů / Ovce / Prasata navigation
 - Home dashboard: subject scrapes + herd counts (pigs total; sheep total + male/female)
 - Sheep/pig **Registr** and **Historie** with filtered grids / summaries, action toolbars, and embedded **Neodeslané změny** (send / cancel)
+- Sheep **Ušní známky** dashboard (free marks by sex + deep links to order/duplicate pages in the original IS)
 - Custom modals for pig buy/kill and sheep birth / buy / sell / home-kill / stolen; each fills the portal’s native jQuery UI dialogs under the hood
-- Ear-mark order pages (`ZnamkyNoveOvc` / `ZnamkyDuplOvc`) wrapped in the shell
+- Ear-mark order pages (`ZnamkyNoveOvc` / `ZnamkyDuplOvc`) wrapped in the shell when opened from those links
 - Opt-out to native UI (`pf=off` / footer / boot exit) and a FAB to re-enable
 
 **Does not:**
@@ -46,6 +47,7 @@ Tampermonkey userscript **Portál farmáře – zjednodušený (prasata + ovce)*
 | `home` | `…/MujSubjekt` |
 | `sheep-send` | `…/StajovyRegistrIndivZmeny` |
 | `sheep-history` | `…/StajovyRegistrIndivPohyby` |
+| `sheep-marks` | `…/StajovyRegistrIndiv` + `?pfView=marks` |
 | `sheep` | `…/StajovyRegistrIndiv` (other Indiv* after more-specific matches) |
 | `pig-send` | `…/StajovyRegistrPrasatZmeny` |
 | `pig-history-redirect` | `…/StajovyRegistrPrasatPohyby` |
@@ -60,7 +62,7 @@ Tampermonkey userscript **Portál farmáře – zjednodušený (prasata + ovce)*
 - `sheep-send` / `pig-send` → corresponding Registr with `#pf-pending` (pending UI lives on Registr, not the Změny subpage)
 - `pig-history-redirect` / `pig-reports` → `StajovyRegistrPrasat` + `pfView=history` (pig “Pohyby” / “Archiv hlášení” controllers are treated as dead/missing)
 
-**In-app tabs:** Sheep Historie uses real `StajovyRegistrIndivPohyby`. Pig Historie is the **same register URL** with `pfView=history` (the Prasata register grid *is* change history).
+**In-app tabs:** Sheep: **Registr → Historie → Ušní známky**. Historie uses real `StajovyRegistrIndivPohyby`; Ušní známky is the same Indiv register URL with `pfView=marks` (summary of free marks by sex + **Nové známky** / **Duplikáty** deep links into `ZnamkyNoveOvc` / `ZnamkyDuplOvc`, no animal grid). Pig Historie is the **same register URL** with `pfView=history` (the Prasata register grid *is* change history); pigs have no marks tab.
 
 **Boot render:** `home` → `PF.views.home`; register kinds → `PF.views.register` + `PF.registers.refresh`; `marks` → `PF.views.marks`; else → `PF.views.other`.
 
@@ -80,7 +82,7 @@ Global namespace: `window.PF`. Cross-cutting helpers (`jq`/`refresh$`, `norm`, `
 | **`PF.confirmDialog`** | Promise-based styled confirm | `function(opts) → Promise<boolean>` | Pending cancel / destructive flows |
 | **`PF.toast`** | Bottom-right toasts (success / error / info) | `announce`/`saved`, `flush`, `beginNavigate`, `installHooks` | Swallows portal flashes; `announce` stashes+queues; `flush` after boot/busy; ~12s duration; click toast to dismiss |
 | **`PF.pending`** | Neodeslané změny on Registr | `refresh`, `parse`, `apply`, `scrollToHashOnce`, `renderTable`, Indiv+Zmeny merge, native select / Odeslat / Smazat | Sheep display from Indiv; IDs/actions from Zmeny; `#pf-pending` smooth scroll yields to user scroll-up |
-| **`PF.registers`** | Move grids into `#pf-host`, toolbar, column filter, summaries | `refresh`, `moveContentToHost`, `buildToolbar`, `simplifyTables`, `render*RegisterSummary`, `invalidateHerdCaches` | Orchestrates pending on Registr |
+| **`PF.registers`** | Move grids into `#pf-host`, toolbar, column filter, summaries | `refresh`, `moveContentToHost`, `buildToolbar`, `simplifyTables`, `render*RegisterSummary`, `renderSheepMarksSummary`, `invalidateHerdCaches` | Orchestrates pending on Registr; sheep-marks uses free-mark counts |
 | **`PF.datePicker`** | Minimal Czech calendar popup | `attach`, `parse`/`format`, `enhanceDialog` | Pig: `maxDaysBack: 7`; sheep: no future |
 | **`PF.pigForms`** | Custom buy/kill → fill native DialogSRSkup / DialogPorizeni | `openBuy`/`openKill`, `runNative`, partner cache, live field validation | Uses `holdBusy`, datePicker, cache invalidation after save; blur validation skipped on dismiss |
 | **`PF.sheepForms`** | Custom modals for sheep action typs; free marks | `openByTyp`, `openBirth`/`openBuy`/`openOut`/`openKill`/`openStolen`, live field validation | Same native-fill pattern; NezaveseneZnamky; birth: sex first (filters marks), mark can infer sex; blur validation skipped on dismiss |
@@ -102,6 +104,7 @@ Also exported: `PF.flushHerdCache`.
 - **`PF._pfQuietMutate` / `PF._pfMutating`** — PF DOM writes must not re-enter the body MutationObserver (refresh storms / resource exhaustion).
 - **Full custom overlay + off-screen native submit** — Farmer sees PF dialogs; portal DialogSRSkup / DialogPorizeni filled and saved hidden so the official post path stays authoritative.
 - **Pig history via `pfView=history`** — `StajovyRegistrPrasatPohyby` / `…Hlaseni` are dead/missing; history is the Prasata register grid itself.
+- **Sheep Ušní známky via `pfView=marks`** — No native free-marks overview; host on Indiv with a sex-split free-mark summary (`NezaveseneZnamky` via `PF.sheepForms.loadAvailableMarks`) and toolbar links to order/duplicate pages in the original IS (`target=_blank`). Animal table / pending / „Akce se zvířaty“ stay off this tab. Order/duplicate util links were removed from Registr.
 - **Změny/send URLs redirect to Registr `#pf-pending`** — Pending UX is embedded; separate send pages are not first-class UIs.
 - **`#pf-pending` auto-scroll is cancelable** — After pending paint, smooth-scroll to the section once; wheel/touch/key scroll-up interrupts it so the loader→content handoff does not fight the farmer.
 - **Sheep pending = Indiv + Zmeny merge** — Display (note, sex, mother, dates) from Indiv pending/`stav=A`; cancel/send IDs and authoritative change labels from Zmeny; paint once both are ready.

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Portál farmáře – zjednodušený (prasata + ovce)
 // @namespace    https://github.com/ceskyDJ/portal-farmare-simplified
-// @version      1.4.16
+// @version      1.5.0
 // @description  Jednoduchý dashboard a registry pro malého chovatele prasat a ovcí v Portálu farmáře / IZR
 // @author       Michal Šmahel (ceskyDJ)
 // @match        https://mze.gov.cz/ssl/app/izr2far/*
@@ -1058,7 +1058,14 @@
     if (/MujSubjekt/i.test(p)) return 'home';
     if (/StajovyRegistrIndivZmeny/i.test(p)) return 'sheep-send';
     if (/StajovyRegistrIndivPohyby/i.test(p)) return 'sheep-history';
-    if (/StajovyRegistrIndiv/i.test(p)) return 'sheep';
+    if (/StajovyRegistrIndiv/i.test(p)) {
+      // Free ear-mark dashboard lives on the register URL (no native marks overview)
+      try {
+        const u = new URL(location.href);
+        if (u.searchParams.get('pfView') === 'marks') return 'sheep-marks';
+      } catch (_) {}
+      return 'sheep';
+    }
     if (/StajovyRegistrPrasatZmeny/i.test(p)) return 'pig-send';
     // Dead/missing pig controllers — redirected in boot
     if (/StajovyRegistrPrasatPohyby/i.test(p)) return 'pig-history-redirect';
@@ -3690,10 +3697,28 @@ body.pf-simple .ui-dialog .grid-table {
         ? (data.links && data.links.pigsPending) || 0
         : (data.links && data.links.sheepPending) || 0;
 
+      // Sheep only: free ear marks on same Indiv URL with pfView=marks
+      const marksHref = (() => {
+        if (isPig) return '';
+        try {
+          const u = new URL(registrHref, location.origin);
+          u.searchParams.set('pfView', 'marks');
+          u.hash = '';
+          return u.pathname + '?' + u.searchParams.toString();
+        } catch (_) {
+          return registrHref;
+        }
+      })();
+
       return `
         <nav class="pf-context-nav" aria-label="Sekce registru">
           <a class="${kind === 'sheep' || kind === 'pig' || kind.includes('send') ? 'pf-tab-active' : ''}" href="${registrHref}${pending > 0 ? '#pf-pending' : ''}">Registr</a>
           <a class="${kind.includes('history') ? 'pf-tab-active' : ''}" href="${histHref}">Historie</a>
+          ${
+            isPig
+              ? ''
+              : `<a class="${kind === 'sheep-marks' ? 'pf-tab-active' : ''}" href="${marksHref}">Ušní známky</a>`
+          }
         </nav>`;
     },
 
@@ -3897,33 +3922,30 @@ body.pf-simple .ui-dialog .grid-table {
     register(kind, data) {
       const active = kind;
       const isRegister = kind === 'sheep' || kind === 'pig';
+      const isMarks = kind === 'sheep-marks';
       const title =
         kind === 'sheep'
           ? 'Registr ovcí'
           : kind === 'sheep-history'
             ? 'Historie ovcí'
-            : kind === 'sheep-send'
-              ? 'Registr ovcí'
-              : kind === 'pig'
-                ? 'Registr prasat'
-                : kind === 'pig-history'
-                  ? 'Historie prasat'
-                  : kind === 'pig-send'
-                    ? 'Registr prasat'
-                    : 'Registr';
-
-      const marks =
-        kind === 'sheep' || kind === 'sheep-send'
-          ? `<div class="pf-util-links">
-              <a href="${PF.config.marksNew}" target="_blank" rel="noopener">Objednat známky</a>
-              <a href="${PF.config.marksDup}" target="_blank" rel="noopener">Duplikáty známek</a>
-            </div>`
-          : '';
+            : kind === 'sheep-marks'
+              ? 'Ušní známky'
+              : kind === 'sheep-send'
+                ? 'Registr ovcí'
+                : kind === 'pig'
+                  ? 'Registr prasat'
+                  : kind === 'pig-history'
+                    ? 'Historie prasat'
+                    : kind === 'pig-send'
+                      ? 'Registr prasat'
+                      : 'Registr';
 
       const actionsLabel =
-        kind === 'sheep' || kind === 'pig' || kind.includes('send')
-          ? 'Akce se zvířaty'
-          : '';
+        isMarks
+          ? ''
+          : kind === 'sheep' || kind === 'pig' || kind.includes('send')
+            ? 'Akce se zvířaty'
+            : '';
 
       const pendingBlock =
         isRegister || kind.includes('send')
@@ -3951,7 +3973,6 @@ body.pf-simple .ui-dialog .grid-table {
         <div class="pf-panel">
           <h2 class="pf-page-title">${title}</h2>
           ${PF.shell.contextLinks(kind, data)}
-          ${marks}
           <div class="pf-actions-block" id="pf-actions-block">
             ${actionsLabel ? `<span class="pf-actions-label">${actionsLabel}</span>` : ''}
             <div class="pf-toolbar" id="pf-toolbar"></div>
@@ -4017,6 +4038,20 @@ body.pf-simple .ui-dialog .grid-table {
       czechWord(n, 'samec ve stáji', 'samci ve stáji', 'samců ve stáji'),
     femalesInStable: (n) =>
       czechWord(n, 'samice ve stáji', 'samice ve stáji', 'samic ve stáji'),
+    freeMarksMale: (n) =>
+      czechWord(
+        n,
+        'volná známka — samec',
+        'volné známky — samci',
+        'volných známek — samců'
+      ),
+    freeMarksFemale: (n) =>
+      czechWord(
+        n,
+        'volná známka — samice',
+        'volné známky — samice',
+        'volných známek — samic'
+      ),
     changes: (n) =>
       czechWord(n, 'neodeslanou změnu', 'neodeslané změny', 'neodeslaných změn'),
     allChangesPhrase: (n) => {
@@ -6192,6 +6227,17 @@ body.pf-simple .ui-dialog .grid-table {
         if (actionsBlock) actionsBlock.style.display = 'none';
         return;
       }
+      if (kind === 'sheep-marks') {
+        if (actionsBlock) actionsBlock.style.display = '';
+        toolbar.innerHTML =
+          '<a class="pf-btn pf-btn-primary" href="' +
+          PF.config.marksNew +
+          '" target="_blank" rel="noopener">Nové známky</a>' +
+          '<a class="pf-btn" href="' +
+          PF.config.marksDup +
+          '" target="_blank" rel="noopener">Duplikáty</a>';
+        return;
+      }
       if (actionsBlock) actionsBlock.style.display = '';
 
       const allow =
@@ -6920,7 +6966,8 @@ body.pf-simple .ui-dialog .grid-table {
           if (
             el.closest('#pf-app .pf-nav') ||
             el.closest('#pf-pig-summary') ||
-            el.closest('#pf-sheep-summary')
+            el.closest('#pf-sheep-summary') ||
+            el.closest('#pf-sheep-marks-summary')
           )
             return;
           if (el.closest('.ui-dialog')) return;
@@ -7003,7 +7050,11 @@ body.pf-simple .ui-dialog .grid-table {
         scope
       ).forEach((el) => {
         if (el.closest('#pf-app .pf-panel > h2, #pf-app .pf-page-title')) return;
-        if (el.closest('#pf-pig-summary') || el.closest('#pf-sheep-summary'))
+        if (
+          el.closest('#pf-pig-summary') ||
+          el.closest('#pf-sheep-summary') ||
+          el.closest('#pf-sheep-marks-summary')
+        )
           return;
         if (el.closest('.ui-dialog')) return;
         if (el.closest && el.closest('.pf-simple-table-wrap')) return;
@@ -8674,6 +8725,100 @@ body.pf-simple .ui-dialog .grid-table {
       return this._sheepSummaryPromise;
     },
 
+    /** Free ear-mark counts by sex (NezaveseneZnamky); no animal grid. */
+    renderSheepMarksSummary() {
+      const host = qs('#pf-host');
+      if (!host) return Promise.resolve();
+
+      qsa(
+        [
+          '.grid',
+          '.grid-full-width',
+          'table.grid-table',
+          'table.dataTable',
+          '.paging',
+          '.grid-paging',
+          '.dt-buttons',
+          '.popup',
+          '.popup-profiles',
+          '.popup-columns',
+          '.dataTables_wrapper',
+          '.pf-simple-table-wrap',
+        ].join(', '),
+        host
+      ).forEach((el) => {
+        el.classList.add('pf-native-grid-hide');
+        if (el.matches && el.matches('table')) el.dataset.pfSimplified = '1';
+      });
+
+      let box = qs('#pf-sheep-marks-summary');
+      if (!box) {
+        box = document.createElement('div');
+        box.id = 'pf-sheep-marks-summary';
+        host.insertBefore(box, host.firstChild);
+      }
+
+      const paint = (male, female) => {
+        box.innerHTML =
+          '<div class="pf-register-summary">' +
+          '<div class="pf-panel pf-stat" style="box-shadow:none;border-style:dashed">' +
+          '<div class="pf-stat-split">' +
+          '<div class="pf-sex-stat pf-sex-stat--male">' +
+          '<div class="pf-num" id="pf-sheep-marks-male">' +
+          (male == null ? '—' : male) +
+          '</div>' +
+          '<div class="pf-label" id="pf-sheep-marks-male-label">' +
+          CZ.freeMarksMale(male) +
+          '</div>' +
+          '</div>' +
+          '<div class="pf-sex-stat pf-sex-stat--female">' +
+          '<div class="pf-num" id="pf-sheep-marks-female">' +
+          (female == null ? '—' : female) +
+          '</div>' +
+          '<div class="pf-label" id="pf-sheep-marks-female-label">' +
+          CZ.freeMarksFemale(female) +
+          '</div>' +
+          '</div>' +
+          '</div>' +
+          '</div>' +
+          '</div>';
+        box.dataset.pfSettled = '1';
+      };
+
+      if (box.dataset.pfSettled === '1' && qs('#pf-sheep-marks-male', box)) {
+        return Promise.resolve();
+      }
+
+      if (this._sheepMarksSummaryLoading && this._sheepMarksSummaryPromise) {
+        return this._sheepMarksSummaryPromise;
+      }
+
+      this._sheepMarksSummaryLoading = true;
+      paint(null, null);
+      this._sheepMarksSummaryPromise = Promise.resolve()
+        .then(() =>
+          PF.sheepForms && typeof PF.sheepForms.loadAvailableMarks === 'function'
+            ? PF.sheepForms.loadAvailableMarks()
+            : []
+        )
+        .then((marks) => {
+          let male = 0;
+          let female = 0;
+          (marks || []).forEach((m) => {
+            if (m && m.sex === 'male') male += 1;
+            else if (m && m.sex === 'female') female += 1;
+          });
+          paint(male, female);
+        })
+        .catch(() => {
+          paint(0, 0);
+        })
+        .finally(() => {
+          this._sheepMarksSummaryLoading = false;
+        });
+      return this._sheepMarksSummaryPromise;
+    },
+
     simplifyTables(kind) {
       const host = qs('#pf-host');
       if (!host) return;
@@ -9366,6 +9511,18 @@ body.pf-simple .ui-dialog .grid-table {
     },
 
     refresh(kind) {
+      if (kind === 'sheep-marks') {
+        return PF._pfQuietMutate(() => {
+          this.moveContentToHost();
+          this.hideFarmChrome(document);
+          this.buildToolbar(kind);
+          qsa(
+            '#pf-host .pf-simple-table-wrap, #pf-sheep-summary, #pf-pig-summary'
+          ).forEach((el) => el.remove());
+          return this.renderSheepMarksSummary();
+        });
+      }
+
       const run = () =>
         PF._pfQuietMutate(() => {
           // Sheep: need "vše" so pending outbound animals remain in the list
@@ -14545,6 +14702,7 @@ body.pf-simple .ui-dialog .grid-table {
       } else if (
         kind === 'sheep' ||
         kind === 'sheep-history' ||
+        kind === 'sheep-marks' ||
         kind === 'sheep-send' ||
         kind === 'pig' ||
         kind === 'pig-history' ||
@@ -14675,6 +14833,15 @@ body.pf-simple .ui-dialog .grid-table {
               return;
             }
             PF.registers.refresh(kind);
+          } else if (kind === 'sheep-marks') {
+            const settled =
+              qs('#pf-sheep-marks-summary') &&
+              qs('#pf-sheep-marks-summary').dataset.pfSettled === '1';
+            if (settled) {
+              PF.registers.buildToolbar(kind);
+              return;
+            }
+            PF.registers.refresh(kind);
           } else if (kind !== 'other' && kind !== 'marks') {
             PF.registers.refresh(kind);
           }
@@ -14714,7 +14881,10 @@ body.pf-simple .ui-dialog .grid-table {
           qs('#pf-pig-summary').dataset.pfSettled === '1') ||
         (kind === 'sheep' &&
           qs('#pf-sheep-summary') &&
-          qs('#pf-sheep-summary').dataset.pfSettled === '1')
+          qs('#pf-sheep-summary').dataset.pfSettled === '1') ||
+        (kind === 'sheep-marks' &&
+          qs('#pf-sheep-marks-summary') &&
+          qs('#pf-sheep-marks-summary').dataset.pfSettled === '1')
       ) {
         return;
       }
