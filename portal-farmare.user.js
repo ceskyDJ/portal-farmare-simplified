@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Portál farmáře – zjednodušený (prasata + ovce)
 // @namespace    https://github.com/ceskyDJ/portal-farmare-simplified
-// @version      1.5.0
+// @version      1.5.1
 // @description  Jednoduchý dashboard a registry pro malého chovatele prasat a ovcí v Portálu farmáře / IZR
 // @author       Michal Šmahel (ceskyDJ)
 // @match        https://mze.gov.cz/ssl/app/izr2far/*
@@ -4041,16 +4041,16 @@ body.pf-simple .ui-dialog .grid-table {
     freeMarksMale: (n) =>
       czechWord(
         n,
-        'volná známka — samec',
-        'volné známky — samci',
-        'volných známek — samců'
+        'volná známka pro samce',
+        'volné známky pro samce',
+        'volných známek pro samce'
       ),
     freeMarksFemale: (n) =>
       czechWord(
         n,
-        'volná známka — samice',
-        'volné známky — samice',
-        'volných známek — samic'
+        'volná známka pro samice',
+        'volné známky pro samice',
+        'volných známek pro samice'
       ),
     changes: (n) =>
       czechWord(n, 'neodeslanou změnu', 'neodeslané změny', 'neodeslaných změn'),
