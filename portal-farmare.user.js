@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Portál farmáře – zjednodušený (prasata + ovce)
 // @namespace    https://github.com/ceskyDJ/portal-farmare-simplified
-// @version      1.5.1
+// @version      1.5.2
 // @description  Jednoduchý dashboard a registry pro malého chovatele prasat a ovcí v Portálu farmáře / IZR
 // @author       Michal Šmahel (ceskyDJ)
 // @match        https://mze.gov.cz/ssl/app/izr2far/*
@@ -3940,12 +3940,11 @@ body.pf-simple .ui-dialog .grid-table {
                       ? 'Registr prasat'
                       : 'Registr';
 
-      const actionsLabel =
-        isMarks
-          ? ''
-          : kind === 'sheep' || kind === 'pig' || kind.includes('send')
-            ? 'Akce se zvířaty'
-            : '';
+      const actionsLabel = isMarks
+        ? 'Akce se známkami'
+        : kind === 'sheep' || kind === 'pig' || kind.includes('send')
+          ? 'Akce se zvířaty'
+          : '';
 
       const pendingBlock =
         isRegister || kind.includes('send')
@@ -6230,10 +6229,10 @@ body.pf-simple .ui-dialog .grid-table {
       if (kind === 'sheep-marks') {
         if (actionsBlock) actionsBlock.style.display = '';
         toolbar.innerHTML =
-          '<a class="pf-btn pf-btn-primary" href="' +
+          '<a class="pf-action-btn" href="' +
           PF.config.marksNew +
           '" target="_blank" rel="noopener">Nové známky</a>' +
-          '<a class="pf-btn" href="' +
+          '<a class="pf-action-btn" href="' +
           PF.config.marksDup +
           '" target="_blank" rel="noopener">Duplikáty</a>';
         return;

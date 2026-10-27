@@ -11,7 +11,7 @@ Living description of `portal-farmare.user.js`: how it works, important decision
 
 ## Contents
 
-Current code baseline: **v1.5.1** (`portal-farmare.user.js`).
+Current code baseline: **v1.5.2** (`portal-farmare.user.js`).
 
 ### Purpose and scope
 
@@ -104,7 +104,7 @@ Also exported: `PF.flushHerdCache`.
 - **`PF._pfQuietMutate` / `PF._pfMutating`** — PF DOM writes must not re-enter the body MutationObserver (refresh storms / resource exhaustion).
 - **Full custom overlay + off-screen native submit** — Farmer sees PF dialogs; portal DialogSRSkup / DialogPorizeni filled and saved hidden so the official post path stays authoritative.
 - **Pig history via `pfView=history`** — `StajovyRegistrPrasatPohyby` / `…Hlaseni` are dead/missing; history is the Prasata register grid itself.
-- **Sheep Ušní známky via `pfView=marks`** — No native free-marks overview; host on Indiv with a sex-split free-mark summary (`NezaveseneZnamky` via `PF.sheepForms.loadAvailableMarks`) and toolbar links to order/duplicate pages in the original IS (`target=_blank`). Animal table / pending / „Akce se zvířaty“ stay off this tab. Order/duplicate util links were removed from Registr.
+- **Sheep Ušní známky via `pfView=marks`** — No native free-marks overview; host on Indiv with a sex-split free-mark summary (`NezaveseneZnamky` via `PF.sheepForms.loadAvailableMarks`) and a register-style green toolbar (**Akce se známkami**: Nové známky / Duplikáty → original IS, `target=_blank`). Animal table / pending / „Akce se zvířaty“ stay off this tab. Order/duplicate util links were removed from Registr.
 - **Změny/send URLs redirect to Registr `#pf-pending`** — Pending UX is embedded; separate send pages are not first-class UIs.
 - **`#pf-pending` auto-scroll is cancelable** — After pending paint, smooth-scroll to the section once; wheel/touch/key scroll-up interrupts it so the loader→content handoff does not fight the farmer.
 - **Sheep pending = Indiv + Zmeny merge** — Display (note, sex, mother, dates) from Indiv pending/`stav=A`; cancel/send IDs and authoritative change labels from Zmeny; paint once both are ready.
