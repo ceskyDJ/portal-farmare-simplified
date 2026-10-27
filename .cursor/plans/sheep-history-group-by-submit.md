@@ -5,10 +5,9 @@ Group sheep history rows by register submission batch (`Datum odeslání` / `DAT
 
 ## Approach
 - Sheep Historie only (`sheep-history`).
-- Group consecutive rows by exact submission datetime (not calendar day alone — same-day sends stay separate).
-- Insert a thin muted full-width group header row when the batch key changes.
-- Drop the visible **Datum nahlášení** column; the date/time lives only in the group header.
-- No collapse, counts, or cards.
+- Package consecutive rows by calendar submission date (`dateOnlyText` of `DATUMCASODESLANI`).
+- Each package: bordered card + label **Hlášení z d. m. YYYY** (sentence case, not thead style) + mini-table.
+- Drop the visible **Datum nahlášení** column.
 - Preserve portal row order; do not re-sort.
 
 ## Done when

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Portál farmáře – zjednodušený (prasata + ovce)
 // @namespace    https://github.com/ceskyDJ/portal-farmare-simplified
-// @version      1.4.15
+// @version      1.4.16
 // @description  Jednoduchý dashboard a registry pro malého chovatele prasat a ovcí v Portálu farmáře / IZR
 // @author       Michal Šmahel (ceskyDJ)
 // @match        https://mze.gov.cz/ssl/app/izr2far/*
@@ -940,26 +940,24 @@
     );
   }
 
-  /** Stable key for sheep Historie submission batches (full datetime). */
+  /** Stable key for sheep Historie packages (calendar date only). */
   function submissionBatchKey(raw) {
-    return String(raw || '')
+    const t = String(raw || '')
       .replace(/\u00a0/g, ' ')
       .replace(/\s+/g, ' ')
-      .trim()
-      .toLowerCase();
+      .trim();
+    if (!t) return '';
+    return norm(dateOnlyText(t));
   }
 
-  /** Farmer-facing group label: date, plus time when the portal has it. */
+  /** Farmer-facing package label: "Hlášení z d. m. YYYY". */
   function submissionBatchLabel(raw) {
     const t = String(raw || '')
       .replace(/\u00a0/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
-    if (!t) return 'Bez data nahlášení';
-    const date = dateOnlyText(t);
-    const tm = t.match(/(\d{1,2})[:.](\d{2})(?:[:.](\d{2}))?/);
-    if (tm) return date + ', ' + tm[1] + ':' + tm[2];
-    return date;
+    if (!t) return 'Hlášení bez data';
+    return 'Hlášení z ' + dateOnlyText(t);
   }
 
   function isFilterChromeRow(tr) {
@@ -1956,6 +1954,36 @@ body.pf-simple a[title*="7 dnů v ÚE" i] {
   background: #fff;
 }
 
+/* Sheep Historie: each submission day as its own package */
+.pf-simple-table-wrap.pf-history-packages {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+}
+
+.pf-history-package {
+  border: 1px solid var(--pf-line);
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.pf-history-package-label {
+  padding: 12px 14px 2px;
+  color: var(--pf-ink);
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.pf-history-package .pf-simple-table th {
+  border-top: 1px solid var(--pf-line);
+}
+
 .pf-simple-table {
   width: 100%;
   border-collapse: collapse;
@@ -1982,22 +2010,6 @@ body.pf-simple a[title*="7 dnů v ÚE" i] {
 
 .pf-simple-table tbody tr:last-child td {
   border-bottom: none;
-}
-
-.pf-simple-table tbody tr.pf-history-group td {
-  background: var(--pf-bg-2);
-  color: var(--pf-muted);
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  padding-top: 10px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--pf-line);
-}
-
-.pf-simple-table tbody tr.pf-history-group:hover td {
-  background: var(--pf-bg-2);
 }
 
 .pf-simple-table tbody tr:hover td {
@@ -8940,7 +8952,7 @@ body.pf-simple .ui-dialog .grid-table {
           });
         }
 
-        // Sheep Historie: group by submission datetime; date lives in group headers
+        // Sheep Historie: package rows by submission date (hide date column)
         let sheepSubmitCol = -1;
         if (kind === 'sheep-history') {
           ths.forEach((th, idx) => {
@@ -8965,6 +8977,7 @@ body.pf-simple .ui-dialog .grid-table {
             if (filtered.length) keepIdx.splice(0, keepIdx.length, ...filtered);
           }
         }
+        const packageBySubmit = kind === 'sheep-history' && sheepSubmitCol >= 0;
 
         if (!keepIdx.length) return;
 
@@ -9000,6 +9013,7 @@ body.pf-simple .ui-dialog .grid-table {
 
         const wrap = document.createElement('div');
         wrap.className = 'pf-simple-table-wrap';
+        if (packageBySubmit) wrap.classList.add('pf-history-packages');
         if (selectable && kind === 'sheep') {
           const hint = document.createElement('p');
           hint.className = 'pf-select-hint';
@@ -9008,36 +9022,41 @@ body.pf-simple .ui-dialog .grid-table {
           wrap.appendChild(hint);
         }
 
-        const simple = document.createElement('table');
-        simple.className = 'pf-simple-table';
-
-        const thead = document.createElement('thead');
-        const hr = document.createElement('tr');
         let selectAllCb = null;
-        if (selectable) {
-          const th = document.createElement('th');
-          th.className = 'pf-select-col';
-          th.removeAttribute('title');
-          selectAllCb = document.createElement('input');
-          selectAllCb.type = 'checkbox';
-          selectAllCb.className = 'pf-row-check';
-          selectAllCb.setAttribute('aria-label', 'Vybrat vše');
-          selectAllCb.removeAttribute('title');
-          th.appendChild(selectAllCb);
-          hr.appendChild(th);
-        }
-        keepIdx.forEach((i) => {
-          const th = document.createElement('th');
-          th.textContent = this.displayHeaderLabel(kind, labels[i] || '');
-          hr.appendChild(th);
-        });
-        thead.appendChild(hr);
-        simple.appendChild(thead);
+        const buildThead = () => {
+          const thead = document.createElement('thead');
+          const hr = document.createElement('tr');
+          if (selectable) {
+            const th = document.createElement('th');
+            th.className = 'pf-select-col';
+            th.removeAttribute('title');
+            // Select-all only on the single-table path (not packages)
+            if (!selectAllCb) {
+              selectAllCb = document.createElement('input');
+              selectAllCb.type = 'checkbox';
+              selectAllCb.className = 'pf-row-check';
+              selectAllCb.setAttribute('aria-label', 'Vybrat vše');
+              selectAllCb.removeAttribute('title');
+              th.appendChild(selectAllCb);
+            }
+            hr.appendChild(th);
+          }
+          keepIdx.forEach((i) => {
+            const th = document.createElement('th');
+            th.textContent = this.displayHeaderLabel(kind, labels[i] || '');
+            hr.appendChild(th);
+          });
+          thead.appendChild(hr);
+          return thead;
+        };
 
-        const tbody = document.createElement('tbody');
         const rowChecks = [];
-        let lastSheepBatchKey = null;
+        const builtRows = [];
         if (!herdRows.length) {
+          const simple = document.createElement('table');
+          simple.className = 'pf-simple-table';
+          simple.appendChild(buildThead());
+          const tbody = document.createElement('tbody');
           const tr = document.createElement('tr');
           const td = document.createElement('td');
           td.colSpan = keepIdx.length + (selectable ? 1 : 0);
@@ -9045,6 +9064,9 @@ body.pf-simple .ui-dialog .grid-table {
           td.textContent = 'Žádné záznamy';
           tr.appendChild(td);
           tbody.appendChild(tr);
+          simple.appendChild(tbody);
+          wrap.appendChild(simple);
+          wrap.classList.remove('pf-history-packages');
         } else {
           herdRows.forEach((row) => {
             const cells = qsa(':scope > td', row);
@@ -9187,27 +9209,60 @@ body.pf-simple .ui-dialog .grid-table {
             // Skip residual filter-operator chrome rows
             if (isFilterChromeRow(tr)) return;
 
-            // Sheep Historie: thin header when submission batch changes
-            if (kind === 'sheep-history' && sheepSubmitCol >= 0) {
-              const rawSubmit = cells[sheepSubmitCol]
+            const rawSubmit =
+              packageBySubmit && cells[sheepSubmitCol]
                 ? cellText(cells[sheepSubmitCol])
                 : '';
-              const batchKey = submissionBatchKey(rawSubmit);
-              if (batchKey !== lastSheepBatchKey) {
-                lastSheepBatchKey = batchKey;
-                const gtr = document.createElement('tr');
-                gtr.className = 'pf-history-group';
-                const gtd = document.createElement('td');
-                gtd.colSpan = keepIdx.length + (selectable ? 1 : 0);
-                gtd.textContent = submissionBatchLabel(rawSubmit);
-                gtr.appendChild(gtd);
-                tbody.appendChild(gtr);
-              }
-            }
-            tbody.appendChild(tr);
+            builtRows.push({
+              tr,
+              batchKey: packageBySubmit ? submissionBatchKey(rawSubmit) : '',
+              batchLabel: packageBySubmit
+                ? submissionBatchLabel(rawSubmit)
+                : '',
+            });
           });
+
+          if (packageBySubmit && builtRows.length) {
+            let pkg = null;
+            const flushPkg = () => {
+              if (!pkg || !pkg.rows.length) return;
+              const pack = document.createElement('div');
+              pack.className = 'pf-history-package';
+              const labelEl = document.createElement('div');
+              labelEl.className = 'pf-history-package-label';
+              labelEl.textContent = pkg.label;
+              const simple = document.createElement('table');
+              simple.className = 'pf-simple-table';
+              simple.appendChild(buildThead());
+              const tbody = document.createElement('tbody');
+              pkg.rows.forEach((r) => tbody.appendChild(r));
+              simple.appendChild(tbody);
+              pack.appendChild(labelEl);
+              pack.appendChild(simple);
+              wrap.appendChild(pack);
+            };
+            builtRows.forEach((item) => {
+              if (!pkg || item.batchKey !== pkg.key) {
+                flushPkg();
+                pkg = {
+                  key: item.batchKey,
+                  label: item.batchLabel,
+                  rows: [],
+                };
+              }
+              pkg.rows.push(item.tr);
+            });
+            flushPkg();
+          } else {
+            const simple = document.createElement('table');
+            simple.className = 'pf-simple-table';
+            simple.appendChild(buildThead());
+            const tbody = document.createElement('tbody');
+            builtRows.forEach((item) => tbody.appendChild(item.tr));
+            simple.appendChild(tbody);
+            wrap.appendChild(simple);
+          }
         }
-        simple.appendChild(tbody);
 
         if (selectAllCb && rowChecks.length) {
           const updateSelectAllUi = () => {
@@ -9240,8 +9295,6 @@ body.pf-simple .ui-dialog .grid-table {
             PF.registers.updateSheepActionAvailability();
           });
         }
-
-        wrap.appendChild(simple);
 
         // Hide original grid block, show simple table in #pf-host (never inside a
         // hidden ancestor — that caused blank Registr after AJAX refreshes).

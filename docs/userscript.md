@@ -11,7 +11,7 @@ Living description of `portal-farmare.user.js`: how it works, important decision
 
 ## Contents
 
-Current code baseline: **v1.4.15** (`portal-farmare.user.js`).
+Current code baseline: **v1.4.16** (`portal-farmare.user.js`).
 
 ### Purpose and scope
 
@@ -106,7 +106,7 @@ Also exported: `PF.flushHerdCache`.
 - **`#pf-pending` auto-scroll is cancelable** — After pending paint, smooth-scroll to the section once; wheel/touch/key scroll-up interrupts it so the loader→content handoff does not fight the farmer.
 - **Sheep pending = Indiv + Zmeny merge** — Display (note, sex, mother, dates) from Indiv pending/`stav=A`; cancel/send IDs and authoritative change labels from Zmeny; paint once both are ready.
 - **Sheep Historie enrichment from Indiv** — Pohyby grid has event `POZNAMKA` (e.g. “Domácí porážka;”) and no sex; before paint, fetch Indiv `stav=A` and show register animal note (`POZNZVIRE`) + sex stripe (same as pending). Drop Matka on history; put Stav last (same Stav-last order on pig Historie).
-- **Sheep Historie grouped by submission** — Many births/kills often share one ÚE send. Group consecutive Pohyby rows by exact `Datum odeslání` / `DATUMCASODESLANI` (full datetime, so same-day sends stay separate). Thin muted header row per batch; drop the visible **Datum nahlášení** column (date/time only in the header). No collapse/cards — keep the table minimal. Preserve portal order.
+- **Sheep Historie packaged by submission date** — Many births/kills often share one ÚE send. Split consecutive Pohyby rows into separate bordered packages by calendar `Datum odeslání` / `DATUMCASODESLANI` (date only, same as the old column). Each package has a sentence-case label **Hlášení z d. m. YYYY** (not thead styling) above its own mini-table; drop the visible **Datum nahlášení** column. Preserve portal order.
 - **Pig Historie / pending hide Konečný stav** — Column dropped from simplified tables; native `KONECNYSTAV` still scraped for Registr headcount / Poslední změna.
 - **Herd vs pending split** — Unsent outbound animals can leave the “platné” herd filter; force `stavZvirat=A` and keep processed-in-ÚE but unsent outbound rows visible until send.
 - **Pig Registr is summary-only** — Headcount + Poslední změna from first **zpracováno** history row’s **Konečný stav** / date on the Prasata grid — not a full animal list.
