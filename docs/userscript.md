@@ -11,7 +11,7 @@ Living description of `portal-farmare.user.js`: how it works, important decision
 
 ## Contents
 
-Current code baseline: **v1.4.10** (`portal-farmare.user.js`).
+Current code baseline: **v1.4.11** (`portal-farmare.user.js`).
 
 ### Purpose and scope
 
@@ -70,7 +70,7 @@ Global namespace: `window.PF`. Cross-cutting helpers (`jq`/`refresh$`, `norm`, `
 
 | Module | Responsibility | Key surface | Interactions |
 |--------|----------------|-------------|--------------|
-| **`PF.loader`** | Boot splash + in-app busy overlay; hooks `$.progressDialog` | `show`/`hide`, `showBusy`/`hideBusy`, `holdBusy`/`releaseBusy`, `installProgressHooks` | Called at document-start and during saves; held overlay ignores portal progress open/close |
+| **`PF.loader`** | Boot splash + in-app busy overlay; hooks `$.progressDialog` | `show`/`hide`, `showBusy`/`hideBusy`, `holdBusy`/`releaseBusy`, `installProgressHooks` | Document-start fonts + splash; while `pf-booting`, busy/hold only update boot subtitle (no second overlay); held overlay ignores portal progress open/close |
 | **`PF.config`** | Paths, action catalogs, column keep/exclude lists | `base`, `home`, marks paths, `freeMarksPath`, `sheepDruhKey` (portal sheep species / `fiDruhZvirat`), `sheepActions`/`pigActions`, `*ColumnsKeep` | Consumed by shell, registers, pending, forms |
 | **Utils (+ quiet mutate)** | DOM helpers, Czech formatting, enable flags | `pageKind`, `formatCzDate`, `friendlyDisplayText`, `isFilterChromeRow` | Quiet mutate sets `PF._pfMutating` so boot MutationObserver ignores PF’s own writes |
 | **`PF.style`** | CSS: hide native chrome, skin shell/tables/modals | `inject()` | Boot adds `body.pf-simple` then `#pf-style` |
@@ -93,7 +93,7 @@ Also exported: `PF.flushHerdCache`.
 
 ### Important decisions (and why)
 
-- **`@run-at document-start` + early loader** — Hide native FOUC; show farmer overlay before portal chrome; install progress hooks as soon as jQuery exists.
+- **`@run-at document-start` + early loader** — Hide native FOUC; show farmer overlay before portal chrome; preload IBM Plex fonts with the splash so the title does not snap mid-load; install progress hooks as soon as jQuery exists. While `html.pf-booting`, `showBusy`/`holdBusy` only retitle the boot splash — portal `$.progressDialog` must not stack a second full-page farmer overlay.
 - **`@grant none` + `@sandbox raw`** — Stay in page JS context (Tampermonkey MAIN_WORLD) to call portal jQuery / `otevritDialogZmeny` / dialogs without GM sandbox bridges / `cloneInto`.
 - **Hide native UI, rebuild shell** — CSS keeps original nodes off-layout but reachable; scrapers and form fillers still need live portal DOM.
 - **Live jQuery lookup (`jq`/`refresh$`)** — Never trust a document-start `$` capture; call `refresh$()` before every `$` use. Portal loads jQuery after document-start (early binding caused `$.aq` / progressDialog / `ajaxComplete` failures — worse on Firefox’s true `document-start`).
@@ -110,7 +110,7 @@ Also exported: `PF.flushHerdCache`.
 - **Herd vs pending split** — Unsent outbound animals can leave the “platné” herd filter; force `stavZvirat=A` and keep processed-in-ÚE but unsent outbound rows visible until send.
 - **Pig Registr is summary-only** — Headcount + Poslední změna from first **zpracováno** history row’s **Konečný stav** / date on the Prasata grid — not a full animal list.
 - **localStorage herd / last-change caches** — Useful across navigations; must invalidate after successful ÚE send (`invalidateHerdCaches`); manual recovery via `#pfFlushCache=1` / `PF.flushHerdCache()`.
-- **Farmer overlay replaces `$.progressDialog`** — `holdBusy` survives portal open/close flicker during saves; idle overlay stays mounted but invisible.
+- **Farmer overlay replaces `$.progressDialog`** — `holdBusy` survives portal open/close flicker during saves; idle overlay stays mounted but invisible. During boot the progress hook never mounts `#pf-busy-loader` (single splash).
 - **Toasts replace portal `#messages-box`** — Bottom-right; hide native boxes and swallow `$.aq` copy. Action outcomes use `PF.toast.announce` / `saved` (sessionStorage + queue). `flush()` after boot/busy hide (plus a post-save retry so portal progress cannot skip it). ~12s auto-dismiss; click the toast to hide sooner. `beginNavigate()` blocks paint before full navigations.
 - **Toolbar event delegation** (`data-pf-pig`) — Toolbar HTML rebuilds often; delegated clicks on `#pf-app` survive rebuilds.
 - **Settled summaries (`dataset.pfSettled`)** — Once painted, skip full refresh teardown to avoid “Načítám…” flicker / pending loops.

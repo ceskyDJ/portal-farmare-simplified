@@ -26,6 +26,12 @@ Living log of non-trivial problems and how they were resolved. Agents maintain t
 
 <!-- Distilled from development sessions that built portal-farmare.user.js (primarily 2026-09-30 → 2026-10-01). Append new records below this line, newest first. -->
 
+### 2026-10-27 — boot-busy-stack-and-font-fout [1.4.10→1.4.11]
+**When:** Initial page load with easy mode on (any IZR page); farmer boot splash visible.
+**Core:** Boot CSS named IBM Plex Serif before fonts were requested (only `@import` in later `PF.style`); portal `$.progressDialog` during boot AJAX mounted a second `#pf-busy-loader` on top of `#pf-boot-loader`.
+**Symptoms:** Title “Portál farmáře” changed typeface mid-splash; felt like multiple whole-page farmer loading screens.
+**Resolution:** Preload Google Fonts link in `PF.loader.show()`; while `html.pf-booting`, `showBusy`/`holdBusy` only update the boot subtitle (no busy mount); `hideBusy`/`releaseBusy` skip busy teardown during boot.
+
 ### 2026-10-27 — firefox-home-sheep-link-missing [1.4.9→1.4.10]
 **When:** Home (`MujSubjekt`) in Firefox Tampermonkey; pigs nav OK, Ovce href stayed `#`, male/female sheep showed `—` (Brave OK).
 **Core:** Sheep new-IZR `StajovyRegistrIndiv` lives only in the SR overview grid (AJAX); AKTIVNÍ PROVOZOVNY has new-IZR pig link but only old `Registr.aspx` for sheep. Home re-render keyed only on pig/sex counts, so a late sheep href never triggered refresh or `fetchSheepSexCounts` (worse on Firefox’s earlier document-start).

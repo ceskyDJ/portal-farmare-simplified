@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Portál farmáře – zjednodušený (prasata + ovce)
 // @namespace    https://github.com/ceskyDJ/portal-farmare-simplified
-// @version      1.4.10
+// @version      1.4.11
 // @description  Jednoduchý dashboard a registry pro malého chovatele prasat a ovcí v Portálu farmáře / IZR
 // @author       Michal Šmahel (ceskyDJ)
 // @match        https://mze.gov.cz/ssl/app/izr2far/*
@@ -118,6 +118,32 @@
     _hideTimer: null,
     _hookTimer: null,
     _busyMo: null,
+    _fontHref:
+      'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:wght@600&display=swap',
+
+    _isBooting() {
+      try {
+        return document.documentElement.classList.contains('pf-booting');
+      } catch (_) {
+        return false;
+      }
+    },
+
+    _ensureFonts() {
+      if (document.getElementById('pf-boot-fonts')) return;
+      const link = document.createElement('link');
+      link.id = 'pf-boot-fonts';
+      link.rel = 'stylesheet';
+      link.href = this._fontHref;
+      (document.head || document.documentElement).appendChild(link);
+    },
+
+    _updateBootSubtitle(subtitle) {
+      if (!subtitle) return;
+      const el = document.getElementById('pf-boot-loader');
+      const sub = el && el.querySelector('.pf-boot-sub');
+      if (sub) sub.textContent = subtitle;
+    },
 
     _overlayCss(extra) {
       return `
@@ -306,6 +332,9 @@
     },
 
     show() {
+      // Start webfonts at document-start so "Portál farmáře" does not
+      // snap from Georgia → IBM Plex once PF.style injects later.
+      this._ensureFonts();
       if (!document.getElementById('pf-boot-style')) {
         const style = document.createElement('style');
         style.id = 'pf-boot-style';
@@ -412,11 +441,24 @@
       if (!earlyEnabled()) return;
       // While a form-save holds the overlay, portal progress open/close is a no-op
       if (this._held) return;
+      // Boot splash already covers the page — don't stack a second farmer overlay
+      // when portal $.progressDialog fires during initial AJAX.
+      if (this._isBooting()) {
+        this._updateBootSubtitle(subtitle || 'Čekejte prosím…');
+        return;
+      }
       this._busyDepth = Math.max(0, this._busyDepth) + 1;
       this._ensureBusyVisible(subtitle || 'Čekejte prosím…');
     },
 
     holdBusy(subtitle) {
+      // Same as showBusy: keep a single splash while booting
+      if (this._isBooting()) {
+        this._held = true;
+        this._busyDepth = Math.max(1, this._busyDepth);
+        this._updateBootSubtitle(subtitle || 'Ukládám…');
+        return;
+      }
       this._held = true;
       this._busyDepth = Math.max(1, this._busyDepth);
       try {
@@ -430,6 +472,7 @@
     hideBusy() {
       // Held overlay stays up until releaseBusy() — ignore portal closes entirely
       if (this._held) return;
+      if (this._isBooting()) return;
       this._busyDepth = Math.max(0, this._busyDepth - 1);
       if (this._busyDepth > 0) return;
       this._scheduleBusyHide();
@@ -442,6 +485,7 @@
       try {
         document.body.classList.remove('pf-save-busy');
       } catch (_) {}
+      if (this._isBooting()) return;
       this._scheduleBusyHide();
     },
 
